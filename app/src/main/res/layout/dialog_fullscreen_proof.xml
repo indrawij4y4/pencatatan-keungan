@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F0000000">
+
+    <!-- Close Button (top-right) -->
+    <FrameLayout
+        android:id="@+id/btnFullscreenClose"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="48dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_circle_icon"
+        android:backgroundTint="#66000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="4dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_close"
+            app:tint="@color/white"
+            android:contentDescription="Tutup" />
+    </FrameLayout>
+
+    <!-- Centered Image -->
+    <ImageView
+        android:id="@+id/ivFullscreenProof"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:padding="24dp"
+        android:contentDescription="Bukti Transaksi" />
+
+    <!-- Bottom Info Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/bg_proof_overlay_gradient"
+        android:padding="24dp"
+        android:paddingTop="48dp">
+
+        <TextView
+            android:id="@+id/tvFullscreenLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bukti Transaksi"
+            android:textColor="#B0FFFFFF"
+            android:textSize="12sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvFullscreenAmount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvFullscreenDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#B0FFFFFF"
+            android:textSize="13sp"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+</FrameLayout>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- Primary Theme Colors (Brutalist Violet / Lavender) -->
+    <color name="primary">#8B5CF6</color>
+    <color name="primary_dark">#6D28D9</color>
+    <color name="primary_light">#EDE9FE</color>
+    
+    <!-- Financial Accents (Brutalist Emerald Mint & Saturated Rose Pink) -->
+    <color name="income_green">#10B981</color>
+    <color name="income_green_light">#E6FBF3</color>
+    <color name="expense_red">#F43F5E</color>
+    <color name="expense_red_light">#FFEBEF</color>
+    
+    <!-- UI Backgrounds and Cards -->
+    <color name="bg_light">#FBFBF9</color>
+    <color name="border_gray">#E2E8F0</color>
+    <color name="card_bg">#FFFFFF</color>
+    
+    <!-- Text Colors -->
+    <color name="text_main">#1E1E1E</color>
+    <color name="text_muted">#6B7280</color>
+    <color name="text_white">#FFFFFF</color>
+
+    <!-- Soft Brutalism Border and Shadow Tokens -->
+    <color name="brutal_border">#1E1E1E</color>
+    <color name="brutal_shadow">#1E1E1E</color>
+</resources>

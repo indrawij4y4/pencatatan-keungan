@@ -1,0 +1,53 @@
+<resources>
+    <string name="app_name">Pencatatan Keuangan</string>
+    <string name="default_period">Juli 2026</string>
+    <string name="desc_select_period">Pilih Periode</string>
+    <string name="desc_profile_icon">Ikon Profil</string>
+    <string name="label_sisa_saldo">Sisa Saldo Anda</string>
+    <string name="label_pemasukan">Pemasukan</string>
+    <string name="label_pengeluaran">Pengeluaran</string>
+    <string name="label_history_header">Transaksi Bulan Ini</string>
+    <string name="empty_state_title">Belum ada transaksi bulan ini.</string>
+    <string name="empty_state_desc">Yuk, catat transaksi keuangan Anda sekarang!</string>
+    <string name="desc_empty_state_img">Gambar tidak ada transaksi</string>
+    <string name="nav_home">Beranda</string>
+    <string name="nav_transactions">Transaksi</string>
+    <string name="nav_reports">Laporan</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="desc_home_menu">Menu Beranda</string>
+    <string name="desc_transactions_menu">Menu Transaksi</string>
+    <string name="desc_reports_menu">Menu Laporan</string>
+    <string name="desc_settings_menu">Menu Pengaturan</string>
+    <string name="desc_add_transaction">Tambah Transaksi</string>
+ 
+    <!-- Month Picker Dialog -->
+    <string name="title_select_period">Pilih Periode Keuangan</string>
+    <string name="month_july_2026">Juli 2026</string>
+    <string name="month_june_2026">Juni 2026</string>
+    <string name="month_may_2026">Mei 2026</string>
+    <string name="month_april_2026">April 2026</string>
+    <string name="month_march_2026">Maret 2026</string>
+    <string name="label_active_suffix">%1$s (Aktif)</string>
+    <string name="label_empty_suffix">%1$s (Kosong)</string>
+
+    <!-- Quick Input Dialog -->
+    <string name="title_input_method">Pilih Metode Pencatatan</string>
+    <string name="method_voice_title">Catat dengan Suara (Voice Note)</string>
+    <string name="method_voice_desc">Ucapkan transaksi, sistem akan mencatat otomatis</string>
+    <string name="method_ocr_title">Pindai Foto Struk (OCR)</string>
+    <string name="method_ocr_desc">Foto nota belanja, data akan diekstrak otomatis</string>
+    <string name="method_manual_title">Input Manual</string>
+    <string name="method_manual_desc">Ketik rincian nominal dan kategori secara mandiri</string>
+
+    <!-- Toast & UI Messages -->
+    <string name="toast_settings_open">Membuka menu Pengaturan &amp; Akun.</string>
+    <string name="toast_home_back">Kembali ke Beranda</string>
+    <string name="toast_transactions_open">Membuka Filter &amp; Pencarian Transaksi Lanjutan</string>
+    <string name="toast_reports_open">Membuka Grafik &amp; Export Laporan Keuangan</string>
+    <string name="toast_settings_app_open">Membuka Pengaturan Aplikasi</string>
+    <string name="toast_voice_input">Membuka Input Suara&#8230; Mulai berbicara untuk mencatat.</string>
+    <string name="toast_ocr_input">Membuka Kamera untuk pemindaian struk (OCR)&#8230;</string>
+    <string name="toast_manual_input">Membuka formulir input transaksi manual.</string>
+    <string name="transaction_detail_format">Detail transaksi: %1$s - Rp %2$s</string>
+    <string name="desc_category_icon">Ikon Kategori</string>
+</resources>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_brutal_card_white"
+    android:clickable="true"
+    android:focusable="true"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginVertical="6dp"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
+
+    <!-- Category Icon Container -->
+    <FrameLayout
+        android:id="@+id/iconContainer"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_circle_icon"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/ivCategoryIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/desc_category_icon"
+            tools:src="@drawable/ic_trending_up" />
+    </FrameLayout>
+
+    <!-- Transaction Details -->
+    <TextView
+        android:id="@+id/tvTransactionTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:textColor="@color/text_main"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:maxLines="1"
+        app:layout_constraintEnd_toStartOf="@+id/tvAmount"
+        app:layout_constraintStart_toEndOf="@+id/iconContainer"
+        app:layout_constraintTop_toTopOf="@+id/iconContainer"
+        tools:text="Beli beras &amp; minyak goreng" />
+
+    <LinearLayout
+        android:id="@+id/layoutSubtitleContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintEnd_toStartOf="@+id/tvAmount"
+        app:layout_constraintStart_toEndOf="@+id/iconContainer"
+        app:layout_constraintTop_toBottomOf="@+id/tvTransactionTitle">
+
+        <TextView
+            android:id="@+id/tvTransactionSubtitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            tools:text="Bahan Baku • Manual" />
+
+        <ImageView
+            android:id="@+id/ivProofBadge"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="4dp"
+            android:src="@drawable/ic_proof_badge"
+            app:tint="@color/text_muted"
+            android:visibility="gone"
+            tools:visibility="visible"
+            android:contentDescription="Bukti foto terlampir" />
+    </LinearLayout>
+
+    <!-- Transaction Amount -->
+    <TextView
+        android:id="@+id/tvAmount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/income_green"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="+Rp 50.000" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

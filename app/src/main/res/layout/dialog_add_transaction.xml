@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/bg_bottom_sheet">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@color/border_gray" />
+
+    <TextView
+        android:id="@+id/tvAddTxTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tambah Transaksi Manual"
+        android:textColor="@color/text_main"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="20dp"/>
+
+    <!-- Scrollable content for input fields -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Section: Jenis Transaksi -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Jenis Transaksi"
+        android:textColor="@color/text_main"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <RadioGroup
+        android:id="@+id/rgAddTxType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <RadioButton
+            android:id="@+id/rbAddTxExpense"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_brutal_chip_filter"
+            android:button="@null"
+            android:gravity="center"
+            android:text="Pengeluaran"
+            android:textSize="13sp"
+            android:textColor="@color/color_chip_text"
+            android:checked="true"
+            android:layout_marginEnd="4dp"/>
+
+        <RadioButton
+            android:id="@+id/rbAddTxIncome"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_brutal_chip_filter"
+            android:button="@null"
+            android:gravity="center"
+            android:text="Pemasukan"
+            android:textSize="13sp"
+            android:textColor="@color/color_chip_text"
+            android:layout_marginStart="4dp"/>
+    </RadioGroup>
+
+    <!-- Nominal -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Nominal (Rupiah)"
+        android:textColor="@color/text_main"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/etAddTxAmount"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/bg_brutal_input"
+        android:hint="Nominal (misal: 50000)"
+        android:inputType="number"
+        android:textColor="@color/text_main"
+        android:textColorHint="@color/text_muted"
+        android:paddingHorizontal="16dp"
+        android:textSize="15sp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Deskripsi -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Catatan / Deskripsi"
+        android:textColor="@color/text_main"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/etAddTxDescription"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/bg_brutal_input"
+        android:hint="Keterangan transaksi"
+        android:inputType="text"
+        android:textColor="@color/text_main"
+        android:textColorHint="@color/text_muted"
+        android:paddingHorizontal="16dp"
+        android:textSize="15sp"
+        android:layout_marginBottom="16dp"/>
+
+
+
+    <!-- Bukti Foto (Optional) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Bukti Foto (Opsional)"
+        android:textColor="@color/text_main"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Empty Upload Zone (shown when no photo selected) -->
+    <LinearLayout
+        android:id="@+id/layoutUploadZone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_upload_zone"
+        android:padding="28dp"
+        android:layout_marginBottom="24dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_image_upload"
+            android:layout_marginBottom="10dp"
+            android:contentDescription="Upload" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tambah Bukti Foto"
+            android:textColor="@color/primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ambil foto atau pilih dari galeri"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Proof Preview Card (shown when photo is selected) -->
+    <FrameLayout
+        android:id="@+id/layoutProofPreview"
+        android:layout_width="match_parent"
+        android:layout_height="180dp"
+        android:layout_marginBottom="24dp"
+        android:visibility="gone"
+        android:background="@drawable/bg_proof_preview_card"
+        android:clipChildren="true"
+        android:clipToPadding="false">
+
+        <ImageView
+            android:id="@+id/ivProofPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="Preview Bukti" />
+
+        <!-- Bottom Gradient Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/bg_proof_overlay_gradient" />
+
+        <!-- Action Buttons Row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:orientation="horizontal"
+            android:layout_marginEnd="10dp"
+            android:layout_marginBottom="10dp">
+
+            <!-- Replace Button -->
+            <LinearLayout
+                android:id="@+id/btnReplaceProof"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:background="@drawable/bg_proof_action_pill"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_swap"
+                    app:tint="@color/text_main"
+                    android:layout_marginEnd="4dp"
+                    android:contentDescription="Ganti" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ganti"
+                    android:textColor="@color/text_main"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Remove Button -->
+            <LinearLayout
+                android:id="@+id/btnRemoveProof"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:background="@drawable/bg_proof_action_pill"
+                android:paddingHorizontal="12dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_close"
+                    app:tint="@color/expense_red"
+                    android:layout_marginEnd="4dp"
+                    android:contentDescription="Hapus" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hapus"
+                    android:textColor="@color/expense_red"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- File Info -->
+        <TextView
+            android:id="@+id/tvProofFileInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="12dp"
+            android:layout_marginBottom="14dp"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:text="Bukti foto terlampir" />
+    </FrameLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Save Button -->
+    <Button
+        android:id="@+id/btnSaveTx"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="16dp"
+        android:text="Simpan Transaksi"
+        android:textColor="@color/white"
+        android:textStyle="bold"
+        android:background="@drawable/bg_brutal_button_primary"
+        app:backgroundTint="@null" />
+
+</LinearLayout>
