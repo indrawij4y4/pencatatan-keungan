@@ -4,17 +4,9 @@ package com.example.pencatatankeungaan
  * IndonesianNumberParser — Utilitas konversi teks bahasa Indonesia menjadi angka nominal.
  *
  * Pipeline:
- *   Raw Text → Lowercase & Trim → Hapus Stopwords → Tokenize
- *   → Konversi kata angka ke digit → Proses pengali → Regex fallback
+ *   Raw Text → Lowercase & Trim → Deteksi & Hapus Angka Non-Moneter (Tahun, No HP, dll.)
+ *   → Tokenize → Konversi kata angka ke digit → Proses pengali → Regex fallback
  *   → Return nominal terbesar
- *
- * Contoh:
- *   "lima puluh ribu" → 50000
- *   "dua ratus lima puluh ribu" → 250000
- *   "sejuta setengah" → 1500000
- *   "50rb" → 50000
- *   "ceban" → 10000
- *   "25000" → 25000
  */
 object IndonesianNumberParser {
 
@@ -99,13 +91,24 @@ object IndonesianNumberParser {
         if (text.isBlank()) return 0L
 
         val cleanedText = text.lowercase().trim()
+        val sb = StringBuilder(cleanedText)
 
-        // Tahap 1: Coba shorthand regex dulu ("50rb", "2jt", "100k")
-        val shorthandResults = mutableListOf<Long>()
+        // Langkah 1: Identifikasi dan ganti semua angka non-moneter dengan spasi (agar tidak diolah oleh parser)
+        pureNumberRegex.findAll(cleanedText).forEach { match ->
+            val numStr = normalizeNumericString(match.value)
+            val valVal = numStr.toLongOrNull() ?: 0L
+            if (isNonMonetary(cleanedText, match.range.first, match.range.last + 1, valVal)) {
+                for (idx in match.range) {
+                    sb.setCharAt(idx, ' ')
+                }
+            }
+        }
+
         shorthandRegex.findAll(cleanedText).forEach { match ->
-            val numberPart = match.groupValues[1].replace(".", "").replace(",", "")
+            val numberPart = match.groupValues[1]
+            val normalizedNumber = normalizeNumericString(numberPart)
+            val baseNumber = normalizedNumber.toDoubleOrNull() ?: 0.0
             val multiplierPart = match.groupValues[2].lowercase()
-            val baseNumber = numberPart.toLongOrNull() ?: 0L
             val multiplier = when (multiplierPart) {
                 "rb", "ribu", "rebu", "rbu" -> 1_000L
                 "jt", "juta", "jet" -> 1_000_000L
@@ -114,53 +117,193 @@ object IndonesianNumberParser {
                 "miliar", "milyar" -> 1_000_000_000L
                 else -> 1L
             }
-            shorthandResults.add(baseNumber * multiplier)
+            val totalValue = (baseNumber * multiplier).toLong()
+            if (isNonMonetary(cleanedText, match.range.first, match.range.last + 1, totalValue)) {
+                for (idx in match.range) {
+                    sb.setCharAt(idx, ' ')
+                }
+            }
         }
 
-        // Tahap 2: Coba word-based parsing
-        val wordResult = parseWords(cleanedText)
+        val textWithoutNonMonetary = sb.toString()
 
-        // Tahap 3: Coba pure number regex ("25000", "1.500.000")
+        // Langkah 2: Jalankan pipeline parsing pada teks yang sudah dibersihkan
+        val shorthandResults = mutableListOf<Long>()
+        shorthandRegex.findAll(textWithoutNonMonetary).forEach { match ->
+            val numberPart = match.groupValues[1]
+            val normalizedNumber = normalizeNumericString(numberPart)
+            val baseNumber = normalizedNumber.toDoubleOrNull() ?: 0.0
+            val multiplierPart = match.groupValues[2].lowercase()
+            val multiplier = when (multiplierPart) {
+                "rb", "ribu", "rebu", "rbu" -> 1_000L
+                "jt", "juta", "jet" -> 1_000_000L
+                "k" -> 1_000L
+                "m" -> 1_000_000L
+                "miliar", "milyar" -> 1_000_000_000L
+                else -> 1L
+            }
+            shorthandResults.add((baseNumber * multiplier).toLong())
+        }
+
+        val wordResult = parseWords(textWithoutNonMonetary)
+
         val pureNumberResults = mutableListOf<Long>()
-        pureNumberRegex.findAll(cleanedText).forEach { match ->
-            val numStr = match.value.replace(".", "").replace(",", "")
+        pureNumberRegex.findAll(textWithoutNonMonetary).forEach { match ->
+            val numStr = normalizeNumericString(match.value)
             numStr.toLongOrNull()?.let { pureNumberResults.add(it) }
         }
 
         // Kumpulkan semua kandidat dan ambil yang terbesar
         val allCandidates = mutableListOf<Long>()
         allCandidates.addAll(shorthandResults)
-        if (wordResult > 0L) allCandidates.add(wordResult)
+        if (wordResult > 0L) {
+            allCandidates.add(wordResult)
+        }
         allCandidates.addAll(pureNumberResults)
 
         return allCandidates.maxOrNull() ?: 0L
     }
 
     /**
+     * Menormalisasi string angka yang mungkin berisi pemisah ribuan dan desimal (titik/koma).
+     * Aturan:
+     * - Jika ada '.' dan ',', pemisah desimal adalah yang terakhir muncul.
+     * - Jika hanya ada '.' atau ',', dan diikuti tepat 3 digit di akhir, dianggap sebagai pemisah ribuan (dibuang).
+     * - Jika diikuti selain 3 digit di akhir, dianggap sebagai pemisah desimal (diubah menjadi '.').
+     */
+    private fun normalizeNumericString(str: String): String {
+        val clean = str.trim()
+        if (clean.isEmpty()) return "0"
+
+        val dotCount = clean.count { it == '.' }
+        val commaCount = clean.count { it == ',' }
+
+        // Kasus 1: Memiliki '.' dan ',' sekaligus
+        if (dotCount > 0 && commaCount > 0) {
+            val lastDot = clean.lastIndexOf('.')
+            val lastComma = clean.lastIndexOf(',')
+            return if (lastDot > lastComma) {
+                // '.' adalah desimal, ',' adalah ribuan
+                clean.replace(",", "").replace(".", ".")
+            } else {
+                // ',' adalah desimal, '.' adalah ribuan
+                clean.replace(".", "").replace(",", ".")
+            }
+        }
+
+        // Kasus 2: Hanya memiliki '.'
+        if (dotCount > 0) {
+            if (dotCount > 1) {
+                return clean.replace(".", "")
+            }
+            val dotIndex = clean.lastIndexOf('.')
+            val afterDotLength = clean.length - dotIndex - 1
+            return if (afterDotLength == 3) {
+                clean.replace(".", "")
+            } else {
+                clean
+            }
+        }
+
+        // Kasus 3: Hanya memiliki ','
+        if (commaCount > 0) {
+            if (commaCount > 1) {
+                return clean.replace(",", "")
+            }
+            val commaIndex = clean.lastIndexOf(',')
+            val afterCommaLength = clean.length - commaIndex - 1
+            return if (afterCommaLength == 3) {
+                clean.replace(",", "")
+            } else {
+                clean.replace(",", ".")
+            }
+        }
+
+        return clean
+    }
+
+    /**
+     * Memeriksa apakah angka yang diparsing berkemungkinan besar non-moneter (seperti tahun/nomor HP).
+     */
+    private fun isNonMonetary(text: String, matchStart: Int, matchEnd: Int, value: Long): Boolean {
+        // 1. Deteksi nomor HP (biasanya 9-15 digit diawali dengan 0, 62, atau 8)
+        val valStr = value.toString()
+        if (valStr.length in 9..15 && (valStr.startsWith("0") || valStr.startsWith("62") || valStr.startsWith("8"))) {
+            return true
+        }
+
+        // Ambil konteks teks di sekitar angka
+        val beforeText = text.substring(0, matchStart).trim().lowercase()
+        val afterText = text.substring(matchEnd).trim().lowercase()
+
+        // Evaluasi kata-kata sebelum angka
+        val wordsBefore = beforeText.split("\\s+".toRegex())
+        if (wordsBefore.isNotEmpty()) {
+            val lastWord = wordsBefore.last().replace(Regex("""[^a-zA-Z0-9]"""), "")
+            val secondLastWord = if (wordsBefore.size >= 2) wordsBefore[wordsBefore.size - 2].replace(Regex("""[^a-zA-Z0-9]"""), "") else ""
+
+            val nonMonetaryPrefixes = setOf(
+                "tahun", "thn", "tanggal", "tgl", "jam", "pukul", "no", "nomor",
+                "umur", "usia", "rt", "rw", "telepon", "telp", "hp", "wa"
+            )
+
+            if (lastWord in nonMonetaryPrefixes || secondLastWord in nonMonetaryPrefixes) {
+                return true
+            }
+        }
+
+        // Evaluasi kata-kata setelah angka
+        val wordsAfter = afterText.split("\\s+".toRegex())
+        if (wordsAfter.isNotEmpty()) {
+            val firstWord = wordsAfter.first().replace(Regex("""[^a-zA-Z0-9]"""), "")
+            val secondWord = if (wordsAfter.size >= 2) wordsAfter[1].replace(Regex("""[^a-zA-Z0-9]"""), "") else ""
+
+            val nonMonetarySuffixes = setOf(
+                "tahun", "thn", "wib", "wita", "wit", "pcs", "biji", "buah", "lembar", "porsi", "unit"
+            )
+
+            if (firstWord in nonMonetarySuffixes || secondWord in nonMonetarySuffixes) {
+                return true
+            }
+        }
+
+        // 2. Deteksi tahun (berkisar antara 1950 - 2100) dan terdapat keyword tanggal/tahun di sekitar angka tersebut
+        if (value in 1950L..2100L) {
+            val dateKeywords = setOf(
+                "tahun", "thn", "tanggal", "tgl",
+                "jan", "feb", "mar", "apr", "mei", "jun", "jul", "agu", "sep", "okt", "nov", "des",
+                "januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"
+            )
+            if (wordsBefore.isNotEmpty()) {
+                val lastWord = wordsBefore.last().replace(Regex("""[^a-zA-Z0-9]"""), "")
+                val secondLastWord = if (wordsBefore.size >= 2) wordsBefore[wordsBefore.size - 2].replace(Regex("""[^a-zA-Z0-9]"""), "") else ""
+                if (lastWord in dateKeywords || secondLastWord in dateKeywords) {
+                    return true
+                }
+            }
+            if (wordsAfter.isNotEmpty()) {
+                val firstWord = wordsAfter.first().replace(Regex("""[^a-zA-Z0-9]"""), "")
+                val secondWord = if (wordsAfter.size >= 2) wordsAfter[1].replace(Regex("""[^a-zA-Z0-9]"""), "") else ""
+                if (firstWord in dateKeywords || secondWord in dateKeywords) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    /**
      * Parsing kata-kata angka Indonesia menjadi nilai numerik.
-     *
-     * Logika:
-     * - Angka dasar (satu-sembilan) di-buffer sebagai currentValue
-     * - Saat bertemu multiplier (puluh/ratus), kalikan currentValue dengan multiplier
-     * - Saat bertemu multiplier besar (ribu/juta/miliar), kalikan accumulated section lalu
-     *   tambahkan ke grandTotal
-     * - "setengah" setelah multiplier besar = 0.5 × multiplier besar terakhir
-     * - Prefix "se" di awal sebelum multiplier = 1 × multiplier
-     *
-     * Contoh:
-     *   "dua ratus lima puluh ribu" → (2×100 + 5×10) × 1000 = 250000
-     *   "sejuta setengah" → 1×1000000 + 0.5×1000000 = 1500000
-     *   "tiga belas ribu" → 13 × 1000 = 13000
      */
     private fun parseWords(text: String): Long {
-        // Hapus stopwords
         val tokens = tokenize(text)
         if (tokens.isEmpty()) return 0L
 
-        var grandTotal = 0L     // Akumulator utama
-        var sectionTotal = 0L   // Akumulator untuk section saat ini (sebelum ribu/juta/miliar)
-        var currentValue = 0L   // Nilai angka yang sedang diproses
-        var lastBigMultiplier = 0L // Multiplier besar terakhir (untuk "setengah")
+        var grandTotal = 0.0     // Akumulator utama
+        var sectionTotal = 0.0   // Akumulator untuk section saat ini
+        var currentValue = 0.0   // Nilai angka yang sedang diproses
+        var lastBigMultiplier = 0.0 // Multiplier besar terakhir
         var hasWordNumber = false
 
         var i = 0
@@ -168,7 +311,8 @@ object IndonesianNumberParser {
             val token = tokens[i]
 
             // Cek apakah token adalah angka numerik murni
-            val numericValue = token.replace(".", "").replace(",", "").toLongOrNull()
+            val normalized = normalizeNumericString(token)
+            val numericValue = normalized.toDoubleOrNull()
             if (numericValue != null) {
                 currentValue = numericValue
                 hasWordNumber = true
@@ -178,9 +322,8 @@ object IndonesianNumberParser {
 
             // Cek slang standalone (cepek, gopek, seceng, goceng, ceban, noban)
             if (token in numberWords && numberWords[token]!! >= 100L) {
-                // Slang terms are standalone values, not composable
-                sectionTotal += numberWords[token]!!
-                currentValue = 0L
+                sectionTotal += numberWords[token]!!.toDouble()
+                currentValue = 0.0
                 hasWordNumber = true
                 i++
                 continue
@@ -188,99 +331,107 @@ object IndonesianNumberParser {
 
             // Cek angka dasar kata (satu-sembilan, sepuluh, sebelas)
             if (token in numberWords) {
-                currentValue = numberWords[token]!!
+                currentValue = numberWords[token]!!.toDouble()
                 hasWordNumber = true
                 i++
                 continue
             }
 
-            // Handle prefix "se" yang berdiri sendiri ("se ribu" -> 1000)
+            // Handle prefix "se" yang berdiri sendiri
             if (token == "se") {
-                currentValue = 1L
+                currentValue = 1.0
                 hasWordNumber = true
                 i++
                 continue
             }
 
-            // Handle "setengah" / "stengah"
+            // Handle "setengah" / "stengah" / "tengah" dengan look-ahead dan look-behind
             if (token == "setengah" || token == "stengah" || token == "tengah") {
-                if (lastBigMultiplier > 0L) {
-                    // "sejuta setengah" → tambahkan 0.5 × multiplier besar terakhir
-                    grandTotal += lastBigMultiplier / 2
+                val nextToken = if (i + 1 < tokens.size) tokens[i + 1] else null
+                val nextMultiplier = if (nextToken != null) multiplierWords[nextToken] else null
+
+                if (nextMultiplier != null && nextMultiplier >= 1_000L) {
+                    val fraction = 0.5
+                    val sectionValue = (sectionTotal + currentValue + fraction) * nextMultiplier.toDouble()
+                    grandTotal += sectionValue
+                    sectionTotal = 0.0
+                    currentValue = 0.0
+                    lastBigMultiplier = nextMultiplier.toDouble()
+                    hasWordNumber = true
+                    i += 2 // Konsumsi "setengah" dan token pengali berikutnya
+                    continue
+                } else if (lastBigMultiplier > 0.0) {
+                    grandTotal += lastBigMultiplier / 2.0
+                    hasWordNumber = true
+                    i++
+                    continue
                 } else {
-                    // Standalone "setengah" tanpa konteks → abaikan
+                    i++
+                    continue
                 }
-                hasWordNumber = true
-                i++
-                continue
             }
 
             // Cek multiplier
             if (token in multiplierWords) {
-                val multiplier = multiplierWords[token]!!
+                val multiplier = multiplierWords[token]!!.toDouble()
                 hasWordNumber = true
 
                 if (token == "belas") {
-                    // "X belas" → X + 10 (misal: "tiga belas" → 13)
-                    currentValue += 10L
+                    currentValue += 10.0
                     i++
                     continue
                 }
 
-                if (multiplier >= 1_000L) {
-                    // Multiplier besar (ribu, juta, miliar)
-                    // Akumulasi section sebelumnya
-                    if (currentValue == 0L && sectionTotal == 0L) {
-                        // "ribu" tanpa angka di depan → dianggap 1 × multiplier
-                        currentValue = 1L
+                if (multiplier >= 1_000.0) {
+                    if (currentValue == 0.0 && sectionTotal == 0.0) {
+                        currentValue = 1.0
                     }
-                    val sectionValue = if (sectionTotal > 0L) {
+                    val sectionValue = if (sectionTotal > 0.0) {
                         (sectionTotal + currentValue) * multiplier
                     } else {
                         currentValue * multiplier
                     }
                     grandTotal += sectionValue
-                    sectionTotal = 0L
-                    currentValue = 0L
+                    sectionTotal = 0.0
+                    currentValue = 0.0
                     lastBigMultiplier = multiplier
                 } else {
-                    // Multiplier kecil (puluh, ratus)
-                    if (currentValue == 0L) currentValue = 1L
+                    if (currentValue == 0.0) currentValue = 1.0
                     currentValue *= multiplier
                     sectionTotal += currentValue
-                    currentValue = 0L
+                    currentValue = 0.0
                 }
                 i++
                 continue
             }
 
-            // Token tidak dikenali → skip
             i++
         }
 
-        // Sisa nilai yang belum di-flush
         grandTotal += sectionTotal + currentValue
 
-        return if (hasWordNumber) grandTotal else 0L
+        return if (hasWordNumber) grandTotal.toLong() else 0L
     }
 
-    /**
-     * Tokenize teks dan buang stopwords.
-     * Juga menangani prefix "se" yang menempel: "seribu" → ["se", "ribu"],
-     * "sejuta" → ["se", "juta"], "seratus" → ["se", "ratus"]
-     */
     private fun tokenize(text: String): List<String> {
-        // Split by whitespace and non-alphanumeric (keep numbers intact)
-        val rawTokens = text.split(Regex("""[\s,;:!?()\[\]{}'\"-]+"""))
+        // Clean non-numeric commas and dots to avoid splitting decimals while cleaning punctuation
+        val cleanedText = text
+            .replace(Regex("(\\d),(\\d)"), "$1[COMMA]$2")
+            .replace(Regex("(\\d)\\.(\\d)"), "$1[DOT]$2")
+            .replace(",", " ")
+            .replace(".", " ")
+            .replace("[COMMA]", ",")
+            .replace("[DOT]", ".")
+
+        // Split by whitespace and other punctuation
+        val rawTokens = cleanedText.split(Regex("""[\s;:!?()\[\]{}'\"-]+"""))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
 
         val result = mutableListOf<String>()
         for (token in rawTokens) {
-            // Skip stopwords
             if (token in stopwords) continue
 
-            // Handle "se-" prefix glued to multiplier: seribu, sejuta, seratus, sepuluh
             if (token.startsWith("se") && token.length > 2) {
                 val suffix = token.substring(2)
                 if (suffix in multiplierWords) {
@@ -288,19 +439,16 @@ object IndonesianNumberParser {
                     result.add(suffix)
                     continue
                 }
-                // "sebelas" is in numberWords, handle as single token
                 if (token in numberWords) {
                     result.add(token)
                     continue
                 }
-                // "sehari", "setengah", etc.
                 if (token == "setengah" || token == "stengah") {
                     result.add(token)
                     continue
                 }
             }
 
-            // Handle "kira-kira" type words
             if (token == "kira-kira") continue
 
             result.add(token)

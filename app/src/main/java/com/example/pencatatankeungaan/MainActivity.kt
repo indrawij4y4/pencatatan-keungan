@@ -297,6 +297,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvGroupedTransactions: RecyclerView
     private lateinit var layoutTransactionsEmptyState: View
     private lateinit var groupedAdapter: GroupedTransactionAdapter
+    private lateinit var recentAdapter: TransactionAdapter
 
     // Reports Widgets
     private lateinit var tvReportsPeriod: TextView
@@ -421,6 +422,16 @@ class MainActivity : AppCompatActivity() {
         rvRecentTransactions.layoutManager = LinearLayoutManager(this)
         rvGroupedTransactions.layoutManager = LinearLayoutManager(this)
 
+        recentAdapter = TransactionAdapter { transaction ->
+            showTransactionDetailDialog(transaction)
+        }
+        rvRecentTransactions.adapter = recentAdapter
+
+        groupedAdapter = GroupedTransactionAdapter { transaction ->
+            showTransactionDetailDialog(transaction)
+        }
+        rvGroupedTransactions.adapter = groupedAdapter
+
         // Initialize Room Database & AppSettings
         val database = AppDatabase.getInstance(this)
         repository = TransactionRepository(database.transactionDao())
@@ -524,13 +535,23 @@ class MainActivity : AppCompatActivity() {
 
         // Export call to actions
         findViewById<View>(R.id.btnExportCsv).setOnClickListener {
-            val sanitizedPeriod = reportsPeriodName.replace(" ", "_").replace("-", "to").replace("/", "_")
+            val periodName = if (filterStartDate != null || filterEndDate != null) {
+                "Kustom"
+            } else {
+                reportsPeriodName
+            }
+            val sanitizedPeriod = periodName.replace(" ", "_").replace("-", "to").replace("/", "_")
             val defaultFileName = "Mutasi_Keuangan_${sanitizedPeriod}.csv"
             createCsvLauncher.launch(defaultFileName)
         }
 
         findViewById<View>(R.id.btnDownloadPdf).setOnClickListener {
-            val sanitizedPeriod = reportsPeriodName.replace(" ", "_").replace("-", "to").replace("/", "_")
+            val periodName = if (filterStartDate != null || filterEndDate != null) {
+                "Kustom"
+            } else {
+                reportsPeriodName
+            }
+            val sanitizedPeriod = periodName.replace(" ", "_").replace("-", "to").replace("/", "_")
             val defaultFileName = "Laporan_Keuangan_${sanitizedPeriod}.pdf"
             createPdfLauncher.launch(defaultFileName)
         }
@@ -686,6 +707,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun filterTransactionsByPeriod(list: List<Transaction>, periodName: String): List<Transaction> {
+        if (periodName == "Semua Periode") return list
         val sdf = SimpleDateFormat("MMMM yyyy", Locale.forLanguageTag("id-ID"))
         return list.filter { tx ->
             sdf.format(Date(tx.timestamp)) == periodName
@@ -693,14 +715,22 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-
     private fun loadPeriodData(period: String) {
         tvCurrentPeriod.text = period
         updateUI()
     }
 
+
     private fun updateUI() {
-        val periodTransactions = filterTransactionsByPeriod(transactionsList, currentPeriodName)
+        val periodTransactions = if (filterStartDate != null || filterEndDate != null) {
+            transactionsList.filter { tx ->
+                val matchesStartDate = filterStartDate == null || tx.timestamp >= filterStartDate!!
+                val matchesEndDate = filterEndDate == null || tx.timestamp <= filterEndDate!! + 86399000L
+                matchesStartDate && matchesEndDate
+            }
+        } else {
+            filterTransactionsByPeriod(transactionsList, currentPeriodName)
+        }
 
         // Calculate dynamic income & expense
         var totalIncome = 0L
@@ -722,17 +752,21 @@ class MainActivity : AppCompatActivity() {
         } else {
             rvRecentTransactions.visibility = View.VISIBLE
             layoutEmptyState.visibility = View.GONE
-            rvRecentTransactions.adapter = TransactionAdapter(recentTransactions) { transaction ->
-                showTransactionDetailDialog(transaction)
-            }
+            recentAdapter.submitList(recentTransactions)
+        }
+
+        // Update current period name display if custom date filter is active
+        if (filterStartDate != null || filterEndDate != null) {
+            val displayDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.forLanguageTag("id-ID"))
+            val startStr = filterStartDate?.let { displayDateFormat.format(Date(it)) } ?: "Awal"
+            val endStr = filterEndDate?.let { displayDateFormat.format(Date(it)) } ?: "Akhir"
+            tvCurrentPeriod.text = "$startStr - $endStr"
+        } else {
+            tvCurrentPeriod.text = currentPeriodName
         }
 
         // 2. Update Transactions Content UI
-        val baseList = if (filterStartDate != null || filterEndDate != null) {
-            transactionsList
-        } else {
-            periodTransactions
-        }
+        val baseList = periodTransactions
 
         val filteredList = baseList.filter { tx ->
             val matchesSearch = currentSearchQuery.isEmpty() ||
@@ -741,10 +775,8 @@ class MainActivity : AppCompatActivity() {
 
             val matchesType = filterType == null || tx.type == filterType
             val matchesCategory = filterCategory == "Semua" || tx.category == filterCategory
-            val matchesStartDate = filterStartDate == null || tx.timestamp >= filterStartDate!!
-            val matchesEndDate = filterEndDate == null || tx.timestamp <= filterEndDate!! + 86399000L
 
-            matchesSearch && matchesType && matchesCategory && matchesStartDate && matchesEndDate
+            matchesSearch && matchesType && matchesCategory
         }
 
         if (filteredList.isEmpty()) {
@@ -754,21 +786,31 @@ class MainActivity : AppCompatActivity() {
             rvGroupedTransactions.visibility = View.VISIBLE
             layoutTransactionsEmptyState.visibility = View.GONE
 
-            if (!::groupedAdapter.isInitialized) {
-                groupedAdapter = GroupedTransactionAdapter(filteredList) { transaction ->
-                    showTransactionDetailDialog(transaction)
-                }
-                rvGroupedTransactions.adapter = groupedAdapter
-            } else {
-                groupedAdapter.submitList(filteredList)
-            }
+            groupedAdapter.submitTransactions(filteredList)
         }
     }
 
     // --- Reports UI Calculation and Binding ---
     private fun updateReportsUI() {
         // Query master list dynamically
-        val reportsTransactions = filterTransactionsByPeriod(transactionsList, reportsPeriodName)
+        val reportsTransactions = if (filterStartDate != null || filterEndDate != null) {
+            transactionsList.filter { tx ->
+                val matchesStartDate = filterStartDate == null || tx.timestamp >= filterStartDate!!
+                val matchesEndDate = filterEndDate == null || tx.timestamp <= filterEndDate!! + 86399000L
+                matchesStartDate && matchesEndDate
+            }
+        } else {
+            filterTransactionsByPeriod(transactionsList, reportsPeriodName)
+        }
+
+        if (filterStartDate != null || filterEndDate != null) {
+            val displayDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.forLanguageTag("id-ID"))
+            val startStr = filterStartDate?.let { displayDateFormat.format(Date(it)) } ?: "Awal"
+            val endStr = filterEndDate?.let { displayDateFormat.format(Date(it)) } ?: "Akhir"
+            tvReportsPeriod.text = "$startStr - $endStr"
+        } else {
+            tvReportsPeriod.text = reportsPeriodName
+        }
 
         // Disable export/download if there is no data
         val btnDownloadPdf = findViewById<View>(R.id.btnDownloadPdf)
@@ -848,8 +890,6 @@ class MainActivity : AppCompatActivity() {
 
             donutChartView.setData(percentages, categoryNames, totalSum)
         }
-
-
     }
 
     private fun dpToPx(dp: Float): Float {
@@ -1067,16 +1107,14 @@ class MainActivity : AppCompatActivity() {
         val ivDetailProof = view.findViewById<ImageView>(R.id.ivDetailProof)
         val cardDetailProof = view.findViewById<View>(R.id.cardDetailProof)
         if (transaction.imagePath != null) {
-            layoutDetailProof.visibility = View.VISIBLE
-            try {
-                val bitmap = decodeSampledBitmap(transaction.imagePath, 360, 200)
+            val bitmap = decodeSampledBitmap(transaction.imagePath, 360, 200)
+            if (bitmap != null) {
+                layoutDetailProof.visibility = View.VISIBLE
                 ivDetailProof.setImageBitmap(bitmap)
-                
                 cardDetailProof.setOnClickListener {
                     showFullscreenProof(transaction)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } else {
                 layoutDetailProof.visibility = View.GONE
             }
         } else {
@@ -1093,6 +1131,12 @@ class MainActivity : AppCompatActivity() {
                 .setMessage("Apakah Anda yakin ingin menghapus transaksi ini?")
                 .setPositiveButton("Hapus") { _, _ ->
                     lifecycleScope.launch(Dispatchers.IO) {
+                        transaction.imagePath?.let { path ->
+                            val file = File(path)
+                            if (file.exists()) {
+                                file.delete()
+                            }
+                        }
                         repository.deleteTransaction(transaction)
                     }
                     Toast.makeText(this, "Transaksi berhasil dihapus", Toast.LENGTH_SHORT).show()
@@ -1121,12 +1165,11 @@ class MainActivity : AppCompatActivity() {
         val tvFullscreenAmount = view.findViewById<TextView>(R.id.tvFullscreenAmount)
         val tvFullscreenDate = view.findViewById<TextView>(R.id.tvFullscreenDate)
 
-        try {
-            val displayMetrics = resources.displayMetrics
-            val bitmap = decodeSampledBitmap(path, displayMetrics.widthPixels, displayMetrics.heightPixels)
+        val displayMetrics = resources.displayMetrics
+        val bitmap = decodeSampledBitmap(path, displayMetrics.widthPixels, displayMetrics.heightPixels)
+        if (bitmap != null) {
             ivFullscreenProof.setImageBitmap(bitmap)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } else {
             Toast.makeText(this, "Gagal memuat gambar bukti", Toast.LENGTH_SHORT).show()
             return
         }
@@ -1226,17 +1269,16 @@ class MainActivity : AppCompatActivity() {
 
         fun updateProofUI() {
             if (currentProofPath != null) {
-                layoutUploadZone.visibility = View.GONE
-                layoutProofPreview.visibility = View.VISIBLE
-                try {
-                    val bitmap = decodeSampledBitmap(currentProofPath!!, 360, 200)
+                val bitmap = decodeSampledBitmap(currentProofPath!!, 360, 200)
+                if (bitmap != null) {
+                    layoutUploadZone.visibility = View.GONE
+                    layoutProofPreview.visibility = View.VISIBLE
                     ivProofPreview.setImageBitmap(bitmap)
                     
                     val file = File(currentProofPath!!)
                     val sizeKb = file.length() / 1024
                     tvProofFileInfo.text = "Bukti Terunggah (${sizeKb} KB)"
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                } else {
                     layoutProofPreview.visibility = View.GONE
                     layoutUploadZone.visibility = View.VISIBLE
                 }
@@ -1346,6 +1388,13 @@ class MainActivity : AppCompatActivity() {
                     return@setOnClickListener
                 }
                 lifecycleScope.launch(Dispatchers.IO) {
+                    val oldPath = transactionToEdit.imagePath
+                    if (oldPath != null && oldPath != currentProofPath) {
+                        val file = File(oldPath)
+                        if (file.exists()) {
+                            file.delete()
+                        }
+                    }
                     repository.updateTransaction(tempTx)
                 }
                 Toast.makeText(this, "Transaksi berhasil diperbarui", Toast.LENGTH_SHORT).show()
@@ -1505,24 +1554,37 @@ class MainActivity : AppCompatActivity() {
         val sdf = SimpleDateFormat("MMMM yyyy", Locale.forLanguageTag("id-ID"))
         val periods = mutableSetOf<String>()
 
-        // Add periods from transactions
-        for (tx in transactionsList) {
-            periods.add(sdf.format(Date(tx.timestamp)))
+        val now = Date()
+        val currentMonthStr = sdf.format(now)
+        periods.add(currentMonthStr)
+
+        if (transactionsList.isNotEmpty()) {
+            val minTimestamp = transactionsList.minOf { it.timestamp }
+            
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = minTimestamp
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            
+            val currentCal = Calendar.getInstance()
+            currentCal.time = now
+            currentCal.set(Calendar.DAY_OF_MONTH, 1)
+            
+            while (cal.before(currentCal)) {
+                periods.add(sdf.format(cal.time))
+                cal.add(Calendar.MONTH, 1)
+            }
         }
 
-        // Fallback to current month only if there are no transactions at all
-        if (periods.isEmpty()) {
-            periods.add(sdf.format(Date()))
-        }
-
-        // Parse back to dates for chronological sorting
-        return periods.map { periodStr ->
+        val sortedPeriods = periods.map { periodStr ->
             try {
                 sdf.parse(periodStr) to periodStr
             } catch (e: Exception) {
                 Date(0L) to periodStr
             }
-        }.sortedBy { it.first }.map { it.second }
+        }.sortedBy { it.first }.map { it.second }.toMutableList()
+
+        sortedPeriods.add("Semua Periode")
+        return sortedPeriods
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -1653,6 +1715,14 @@ class MainActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         // Clear Room Database
                         repository.clearAll()
+                        // Clear Cache files
+                        withContext(Dispatchers.IO) {
+                            cacheDir.listFiles()?.forEach { file ->
+                                if (file.name.startsWith("proof")) {
+                                    file.delete()
+                                }
+                            }
+                        }
                         // Clear DataStore Preferences
                         appSettings.clearSettings()
                         // Keep onboarding completed as true so mock data is not re-created
@@ -1914,28 +1984,22 @@ class MainActivity : AppCompatActivity() {
         val viewPulseOuter = view.findViewById<View>(R.id.viewPulseOuter)
         val viewPulseInner = view.findViewById<View>(R.id.viewPulseInner)
         val btnCancelRecording = view.findViewById<Button>(R.id.btnCancelRecording)
+        val originalStatusColor = tvVoiceStatus.textColors
 
         // Start pulse animation
         startPulseAnimation(viewPulseOuter, viewPulseInner)
 
-        btnCancelRecording.setOnClickListener {
-            voiceInputManager.cancel()
-            stopPulseAnimation()
-            voiceRecordingDialog?.dismiss()
-        }
+        var isInErrorState = false
+        lateinit var recognitionCallback: VoiceInputManager.Callback
 
-        voiceRecordingDialog?.setOnDismissListener {
-            voiceInputManager.cancel()
-            stopPulseAnimation()
-        }
-
-        voiceRecordingDialog?.show()
-
-        // Mulai speech recognition
-        voiceInputManager.startListening(object : VoiceInputManager.Callback {
+        recognitionCallback = object : VoiceInputManager.Callback {
             override fun onListening() {
+                stopPulseAnimation()
+                tvVoiceStatus.setTextColor(originalStatusColor)
                 tvVoiceStatus.text = "Mendengarkan..."
                 tvPartialResult.text = "Silakan ucapkan transaksi Anda..."
+                btnCancelRecording.text = "Batal"
+                isInErrorState = false
             }
 
             override fun onPartialResult(partialText: String) {
@@ -1953,10 +2017,67 @@ class MainActivity : AppCompatActivity() {
 
             override fun onError(errorMessage: String) {
                 stopPulseAnimation()
-                voiceRecordingDialog?.dismiss()
-                Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+                isInErrorState = true
+
+                // Reset scales of circles to base
+                viewPulseOuter.animate().scaleX(1.0f).scaleY(1.0f).alpha(0.3f).setDuration(150).start()
+                viewPulseInner.animate().scaleX(1.0f).scaleY(1.0f).alpha(0.6f).setDuration(150).start()
+
+                tvVoiceStatus.text = "Gagal Mendengar"
+                tvVoiceStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.expense_red))
+                tvPartialResult.text = errorMessage
+                btnCancelRecording.text = "Coba Lagi"
             }
-        })
+
+            override fun onRmsChanged(rmsdB: Float) {
+                if (!isInErrorState && pulseAnimatorSet == null) {
+                    val db = rmsdB.coerceIn(0f, 12f)
+                    val scaleInner = 1.0f + (db / 12f) * 0.25f
+                    val scaleOuter = 1.0f + (db / 12f) * 0.55f
+
+                    viewPulseInner.animate()
+                        .scaleX(scaleInner)
+                        .scaleY(scaleInner)
+                        .alpha(0.6f + (db / 12f) * 0.3f)
+                        .setDuration(60)
+                        .start()
+
+                    viewPulseOuter.animate()
+                        .scaleX(scaleOuter)
+                        .scaleY(scaleOuter)
+                        .alpha(0.3f + (db / 12f) * 0.4f)
+                        .setDuration(60)
+                        .start()
+                }
+            }
+        }
+
+        btnCancelRecording.setOnClickListener {
+            if (isInErrorState) {
+                isInErrorState = false
+                tvVoiceStatus.setTextColor(originalStatusColor)
+                tvVoiceStatus.text = "Menghubungkan..."
+                tvPartialResult.text = "Silakan ucapkan transaksi Anda..."
+                btnCancelRecording.text = "Batal"
+                startPulseAnimation(viewPulseOuter, viewPulseInner)
+
+                voiceInputManager.startListening(recognitionCallback)
+            } else {
+                voiceInputManager.cancel()
+                stopPulseAnimation()
+                voiceRecordingDialog?.dismiss()
+            }
+        }
+
+        voiceRecordingDialog?.setOnDismissListener {
+            voiceInputManager.cancel()
+            stopPulseAnimation()
+        }
+
+        voiceRecordingDialog?.show()
+
+        // Mulai speech recognition
+        voiceInputManager.startListening(recognitionCallback)
     }
 
     /**
@@ -2026,17 +2147,16 @@ class MainActivity : AppCompatActivity() {
 
         fun updateVoiceProofUI() {
             if (voiceProofPath != null) {
-                layoutVoiceUploadZone.visibility = View.GONE
-                layoutVoiceProofPreview.visibility = View.VISIBLE
-                try {
-                    val bitmap = decodeSampledBitmap(voiceProofPath!!, 360, 200)
+                val bitmap = decodeSampledBitmap(voiceProofPath!!, 360, 200)
+                if (bitmap != null) {
+                    layoutVoiceUploadZone.visibility = View.GONE
+                    layoutVoiceProofPreview.visibility = View.VISIBLE
                     ivVoiceProofPreview.setImageBitmap(bitmap)
                     
                     val file = File(voiceProofPath!!)
                     val sizeKb = file.length() / 1024
                     tvVoiceProofFileInfo.text = "Bukti Terunggah (${sizeKb} KB)"
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                } else {
                     layoutVoiceProofPreview.visibility = View.GONE
                     layoutVoiceUploadZone.visibility = View.VISIBLE
                 }
@@ -2206,7 +2326,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getFilteredReportsTransactions(): List<Transaction> {
-        return filterTransactionsByPeriod(transactionsList, reportsPeriodName)
+        return if (filterStartDate != null || filterEndDate != null) {
+            transactionsList.filter { tx ->
+                val matchesStartDate = filterStartDate == null || tx.timestamp >= filterStartDate!!
+                val matchesEndDate = filterEndDate == null || tx.timestamp <= filterEndDate!! + 86399000L
+                matchesStartDate && matchesEndDate
+            }
+        } else {
+            filterTransactionsByPeriod(transactionsList, reportsPeriodName)
+        }
     }
 
     private fun formatCurrencyAccounting(amount: Long): String {
@@ -2374,7 +2502,15 @@ class MainActivity : AppCompatActivity() {
                     textAlign = Paint.Align.RIGHT
                     isAntiAlias = true
                 }
-                canvas.drawText("Periode: $reportsPeriodName", 555f, 60f, paintPeriod)
+                val periodDisplay = if (filterStartDate != null || filterEndDate != null) {
+                    val displayDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.forLanguageTag("id-ID"))
+                    val startStr = filterStartDate?.let { displayDateFormat.format(Date(it)) } ?: "Awal"
+                    val endStr = filterEndDate?.let { displayDateFormat.format(Date(it)) } ?: "Akhir"
+                    "$startStr - $endStr"
+                } else {
+                    reportsPeriodName
+                }
+                canvas.drawText("Periode: $periodDisplay", 555f, 60f, paintPeriod)
                 canvas.drawLine(marginLeft, 80f, 555f, 80f, paintBrutalLine)
                 
                 // --- DRAW SUMMARY CARD ---
@@ -2542,11 +2678,11 @@ class MainActivity : AppCompatActivity() {
                 drawFooter(canvas, pageNumber)
                 pdfDocument.finishPage(page)
                 
-                val pfd = contentResolver.openFileDescriptor(uri, "w")
-                val fileOutputStream = java.io.FileOutputStream(pfd?.fileDescriptor)
-                pdfDocument.writeTo(fileOutputStream)
-                fileOutputStream.close()
-                pfd?.close()
+                contentResolver.openFileDescriptor(uri, "w")?.use { pfd ->
+                    java.io.FileOutputStream(pfd.fileDescriptor).use { fileOutputStream ->
+                        pdfDocument.writeTo(fileOutputStream)
+                    }
+                }
                 
                 success = true
             } catch (e: Exception) {
@@ -2612,6 +2748,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getReportsTimestampRange(): Pair<Long, Long>? {
+        if (filterStartDate != null || filterEndDate != null) {
+            val min = filterStartDate ?: (transactionsList.minOfOrNull { it.timestamp } ?: return null)
+            val max = filterEndDate?.let { it + 86399000L } ?: (transactionsList.maxOfOrNull { it.timestamp } ?: return null)
+            return Pair(min, max)
+        }
+
         val parsedDate = try {
             SimpleDateFormat("MMMM yyyy", Locale.forLanguageTag("id-ID")).parse(reportsPeriodName)
         } catch (e: Exception) {
@@ -2649,64 +2791,62 @@ class MainActivity : AppCompatActivity() {
                     
                     val initialBalance = repository.getBalanceBeforeTimestamp(startDate)
                     
-                    val pfd = contentResolver.openFileDescriptor(uri, "w")
-                    val fileOutputStream = java.io.FileOutputStream(pfd?.fileDescriptor)
-                    val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(fileOutputStream, "UTF-8"))
-                    
-                    // Write Excel delimiter directive
-                    writer.write("sep=;\r\n")
-                    // Write header
-                    writer.write("Tanggal;Keterangan;Kategori;Tipe Transaksi;Pemasukan;Pengeluaran;Saldo Berjalan;Sumber Input\r\n")
-                    
-                    var runningBalance = initialBalance
-                    var offset = 0
-                    val limit = 500
-                    var hasMore = true
-                    val csvDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-                    
-                    while (hasMore) {
-                        val batch = repository.getTransactionsPagedInRange(startDate, endDate, limit, offset)
-                        if (batch.isEmpty()) {
-                            hasMore = false
-                        } else {
-                            for (tx in batch) {
-                                val formattedDate = csvDateFormat.format(Date(tx.timestamp))
-                                val escapedDescription = escapeCsvField(tx.description)
-                                val escapedCategory = escapeCsvField(tx.category)
-                                val typeText = if (tx.type == TransactionType.INCOME) "Pemasukan" else "Pengeluaran"
+                    contentResolver.openFileDescriptor(uri, "w")?.use { pfd ->
+                        java.io.FileOutputStream(pfd.fileDescriptor).use { fileOutputStream ->
+                            java.io.BufferedWriter(java.io.OutputStreamWriter(fileOutputStream, "UTF-8")).use { writer ->
+                                // Write Excel delimiter directive
+                                writer.write("sep=;\r\n")
+                                // Write header
+                                writer.write("Tanggal;Keterangan;Kategori;Tipe Transaksi;Pemasukan;Pengeluaran;Saldo Berjalan;Sumber Input\r\n")
                                 
-                                val incomeStr: String
-                                val expenseStr: String
-                                if (tx.type == TransactionType.INCOME) {
-                                    incomeStr = tx.amount.toString()
-                                    expenseStr = ""
-                                    runningBalance += tx.amount
-                                } else {
-                                    incomeStr = ""
-                                    expenseStr = tx.amount.toString()
-                                    runningBalance -= tx.amount
+                                var runningBalance = initialBalance
+                                var offset = 0
+                                val limit = 500
+                                var hasMore = true
+                                val csvDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                                
+                                while (hasMore) {
+                                    val batch = repository.getTransactionsPagedInRange(startDate, endDate, limit, offset)
+                                    if (batch.isEmpty()) {
+                                        hasMore = false
+                                    } else {
+                                        for (tx in batch) {
+                                            val formattedDate = csvDateFormat.format(Date(tx.timestamp))
+                                            val escapedDescription = escapeCsvField(tx.description)
+                                            val escapedCategory = escapeCsvField(tx.category)
+                                            val typeText = if (tx.type == TransactionType.INCOME) "Pemasukan" else "Pengeluaran"
+                                            
+                                            val incomeStr: String
+                                            val expenseStr: String
+                                            if (tx.type == TransactionType.INCOME) {
+                                                incomeStr = tx.amount.toString()
+                                                expenseStr = ""
+                                                runningBalance += tx.amount
+                                            } else {
+                                                incomeStr = ""
+                                                expenseStr = tx.amount.toString()
+                                                runningBalance -= tx.amount
+                                            }
+                                            
+                                            val sourceText = when (tx.source) {
+                                                TransactionSource.VOICE -> "Suara"
+                                                TransactionSource.MANUAL -> "Manual"
+                                                TransactionSource.OCR -> "Struk"
+                                            }
+                                            val escapedSource = escapeCsvField(sourceText)
+                                            
+                                            writer.write("$formattedDate;$escapedDescription;$escapedCategory;$typeText;$incomeStr;$expenseStr;$runningBalance;$escapedSource\r\n")
+                                        }
+                                        offset += limit
+                                        if (batch.size < limit) {
+                                            hasMore = false
+                                        }
+                                    }
                                 }
-                                
-                                val sourceText = when (tx.source) {
-                                    TransactionSource.VOICE -> "Suara"
-                                    TransactionSource.MANUAL -> "Manual"
-                                    TransactionSource.OCR -> "Struk"
-                                }
-                                val escapedSource = escapeCsvField(sourceText)
-                                
-                                writer.write("$formattedDate;$escapedDescription;$escapedCategory;$typeText;$incomeStr;$expenseStr;$runningBalance;$escapedSource\r\n")
-                            }
-                            offset += limit
-                            if (batch.size < limit) {
-                                hasMore = false
+                                writer.flush()
                             }
                         }
                     }
-                    
-                    writer.flush()
-                    writer.close()
-                    fileOutputStream.close()
-                    pfd?.close()
                     success = true
                 }
             } catch (e: Exception) {

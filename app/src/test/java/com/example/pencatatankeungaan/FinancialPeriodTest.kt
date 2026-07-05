@@ -13,22 +13,37 @@ class FinancialPeriodTest {
         val sdf = SimpleDateFormat("MMMM yyyy", Locale.forLanguageTag("id-ID"))
         val periods = mutableSetOf<String>()
 
-        // Always include current month
         periods.add(currentMonthStr)
 
-        // Add periods from transactions
-        for (tx in transactions) {
-            periods.add(sdf.format(Date(tx.timestamp)))
+        if (transactions.isNotEmpty()) {
+            val minTimestamp = transactions.minOf { it.timestamp }
+            
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = minTimestamp
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            
+            val currentCal = Calendar.getInstance()
+            try {
+                currentCal.time = sdf.parse(currentMonthStr) ?: Date()
+            } catch (e: Exception) {}
+            currentCal.set(Calendar.DAY_OF_MONTH, 1)
+            
+            while (cal.before(currentCal)) {
+                periods.add(sdf.format(cal.time))
+                cal.add(Calendar.MONTH, 1)
+            }
         }
 
-        // Chronological sort
-        return periods.map { periodStr ->
+        val sortedPeriods = periods.map { periodStr ->
             try {
                 sdf.parse(periodStr) to periodStr
             } catch (e: Exception) {
                 Date(0L) to periodStr
             }
-        }.sortedBy { it.first }.map { it.second }
+        }.sortedBy { it.first }.map { it.second }.toMutableList()
+
+        sortedPeriods.add("Semua Periode")
+        return sortedPeriods
     }
 
     private fun getMockTimestamp(year: Int, monthIndex: Int, day: Int): Long {
@@ -49,8 +64,9 @@ class FinancialPeriodTest {
         val currentMonth = "Juli 2026"
         val periods = getAvailablePeriods(transactions, currentMonth)
 
-        assertEquals(1, periods.size)
+        assertEquals(2, periods.size)
         assertEquals("Juli 2026", periods[0])
+        assertEquals("Semua Periode", periods[1])
     }
 
     @Test
@@ -64,12 +80,14 @@ class FinancialPeriodTest {
 
         val periods = getAvailablePeriods(transactions, currentMonth)
 
-        // Expected sorted chronologically: Maret 2026, Mei 2026, Juni 2026, Juli 2026
-        assertEquals(4, periods.size)
+        // Expected sorted chronologically and sequentially: Maret 2026, April 2026 (empty but generated), Mei 2026, Juni 2026, Juli 2026, Semua Periode
+        assertEquals(6, periods.size)
         assertEquals("Maret 2026", periods[0])
-        assertEquals("Mei 2026", periods[1])
-        assertEquals("Juni 2026", periods[2])
-        assertEquals("Juli 2026", periods[3])
+        assertEquals("April 2026", periods[1])
+        assertEquals("Mei 2026", periods[2])
+        assertEquals("Juni 2026", periods[3])
+        assertEquals("Juli 2026", periods[4])
+        assertEquals("Semua Periode", periods[5])
     }
 
     @Test
@@ -84,12 +102,14 @@ class FinancialPeriodTest {
         val periods = getAvailablePeriods(transactions, currentMonth)
         val reversedPeriods = periods.reversed()
 
-        // Expected sorted reverse-chronologically (newer on top): Juli 2026, Juni 2026, Mei 2026, Maret 2026
-        assertEquals(4, reversedPeriods.size)
-        assertEquals("Juli 2026", reversedPeriods[0])
-        assertEquals("Juni 2026", reversedPeriods[1])
-        assertEquals("Mei 2026", reversedPeriods[2])
-        assertEquals("Maret 2026", reversedPeriods[3])
+        // Expected sorted reverse-chronologically (newer on top): Semua Periode, Juli 2026, Juni 2026, Mei 2026, April 2026, Maret 2026
+        assertEquals(6, reversedPeriods.size)
+        assertEquals("Semua Periode", reversedPeriods[0])
+        assertEquals("Juli 2026", reversedPeriods[1])
+        assertEquals("Juni 2026", reversedPeriods[2])
+        assertEquals("Mei 2026", reversedPeriods[3])
+        assertEquals("April 2026", reversedPeriods[4])
+        assertEquals("Maret 2026", reversedPeriods[5])
     }
 
     @Test
@@ -114,8 +134,9 @@ class FinancialPeriodTest {
             }
         }
 
-        // Maret 2026 and Juni 2026 should not be empty. Juli 2026 should be empty.
+        // Maret 2026 and Juni 2026 should not be empty. April 2026 and Juli 2026 should be empty.
         assertFalse(emptyPeriods.contains("Maret 2026"))
+        assertTrue(emptyPeriods.contains("April 2026"))
         assertFalse(emptyPeriods.contains("Juni 2026"))
         assertTrue(emptyPeriods.contains("Juli 2026"))
     }

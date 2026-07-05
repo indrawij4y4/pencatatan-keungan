@@ -37,6 +37,7 @@ class VoiceInputManager(private val context: Context) {
         fun onPartialResult(partialText: String)
         fun onResult(fullText: String)
         fun onError(errorMessage: String)
+        fun onRmsChanged(rmsdB: Float) {}
     }
 
     /**
@@ -87,7 +88,7 @@ class VoiceInputManager(private val context: Context) {
             }
 
             override fun onRmsChanged(rmsdB: Float) {
-                // Bisa digunakan untuk animasi volume (future enhancement)
+                callback?.onRmsChanged(rmsdB)
             }
 
             override fun onBufferReceived(buffer: ByteArray?) {

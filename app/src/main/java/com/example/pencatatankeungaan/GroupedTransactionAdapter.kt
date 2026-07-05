@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -19,23 +21,15 @@ sealed class GroupedTransactionItem {
 }
 
 class GroupedTransactionAdapter(
-    private var rawTransactions: List<Transaction>,
     private val onItemClick: (Transaction) -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+) : ListAdapter<GroupedTransactionItem, RecyclerView.ViewHolder>(GroupedDiffCallback()) {
 
-    private var groupedItems: List<GroupedTransactionItem> = emptyList()
-
-    init {
-        submitList(rawTransactions)
-    }
-
-    fun submitList(newList: List<Transaction>) {
-        rawTransactions = newList
+    fun submitTransactions(newList: List<Transaction>) {
         val currentTime = System.currentTimeMillis()
         
         // Group by date string "yyyy-MM-dd"
         val dayKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val groupedByDay = rawTransactions.groupBy { dayKeyFormat.format(Date(it.timestamp)) }
+        val groupedByDay = newList.groupBy { dayKeyFormat.format(Date(it.timestamp)) }
         
         // Sort keys in descending order (newest date first)
         val sortedKeys = groupedByDay.keys.sortedDescending()
@@ -61,8 +55,7 @@ class GroupedTransactionAdapter(
             }
         }
         
-        groupedItems = items
-        notifyDataSetChanged()
+        submitList(items)
     }
 
     private fun getGroupDateLabel(timestamp: Long, currentTimeMillis: Long): String {
@@ -82,7 +75,7 @@ class GroupedTransactionAdapter(
     }
 
     override fun getItemViewType(position: Int): Int {
-        return when (groupedItems[position]) {
+        return when (getItem(position)) {
             is GroupedTransactionItem.Header -> VIEW_TYPE_HEADER
             is GroupedTransactionItem.Item -> VIEW_TYPE_ITEM
         }
@@ -100,15 +93,13 @@ class GroupedTransactionAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        val item = groupedItems[position]
+        val item = getItem(position)
         if (holder is HeaderViewHolder && item is GroupedTransactionItem.Header) {
             holder.bind(item)
         } else if (holder is ItemViewHolder && item is GroupedTransactionItem.Item) {
             holder.bind(item.transaction, onItemClick)
         }
     }
-
-    override fun getItemCount(): Int = groupedItems.size
 
     class HeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvHeaderDate: TextView = itemView.findViewById(R.id.tvHeaderDate)
@@ -182,6 +173,24 @@ class GroupedTransactionAdapter(
             }
 
             itemView.setOnClickListener { onItemClick(transaction) }
+        }
+    }
+
+    class GroupedDiffCallback : DiffUtil.ItemCallback<GroupedTransactionItem>() {
+        override fun areItemsTheSame(oldItem: GroupedTransactionItem, newItem: GroupedTransactionItem): Boolean {
+            return when {
+                oldItem is GroupedTransactionItem.Header && newItem is GroupedTransactionItem.Header -> {
+                    oldItem.dateLabel == newItem.dateLabel
+                }
+                oldItem is GroupedTransactionItem.Item && newItem is GroupedTransactionItem.Item -> {
+                    oldItem.transaction.id == newItem.transaction.id
+                }
+                else -> false
+            }
+        }
+
+        override fun areContentsTheSame(oldItem: GroupedTransactionItem, newItem: GroupedTransactionItem): Boolean {
+            return oldItem == newItem
         }
     }
 

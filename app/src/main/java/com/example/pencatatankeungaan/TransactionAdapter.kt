@@ -7,16 +7,15 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 class TransactionAdapter(
-    private val transactions: List<Transaction>,
     private val onItemClick: (Transaction) -> Unit
-) : RecyclerView.Adapter<TransactionAdapter.TransactionViewHolder>() {
+) : ListAdapter<Transaction, TransactionAdapter.TransactionViewHolder>(TransactionDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TransactionViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -25,16 +24,15 @@ class TransactionAdapter(
     }
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
-        holder.bind(transactions[position], onItemClick)
+        holder.bind(getItem(position), onItemClick)
     }
-
-    override fun getItemCount(): Int = transactions.size
 
     class TransactionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val ivCategoryIcon: ImageView = itemView.findViewById(R.id.ivCategoryIcon)
         private val tvTransactionTitle: TextView = itemView.findViewById(R.id.tvTransactionTitle)
         private val tvTransactionSubtitle: TextView = itemView.findViewById(R.id.tvTransactionSubtitle)
         private val tvAmount: TextView = itemView.findViewById(R.id.tvAmount)
+        private val ivProofBadge: ImageView = itemView.findViewById(R.id.ivProofBadge)
 
         fun bind(transaction: Transaction, onItemClick: (Transaction) -> Unit) {
             tvTransactionTitle.text = transaction.description
@@ -46,6 +44,13 @@ class TransactionAdapter(
                 TransactionSource.OCR -> "Struk"
             }
             tvTransactionSubtitle.text = "${transaction.category} • $sourceText"
+
+            // Set Proof Badge visibility
+            if (transaction.imagePath != null) {
+                ivProofBadge.visibility = View.VISIBLE
+            } else {
+                ivProofBadge.visibility = View.GONE
+            }
 
             // Format Currency
             val numberFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID"))
@@ -75,6 +80,16 @@ class TransactionAdapter(
             }
 
             itemView.setOnClickListener { onItemClick(transaction) }
+        }
+    }
+
+    class TransactionDiffCallback : DiffUtil.ItemCallback<Transaction>() {
+        override fun areItemsTheSame(oldItem: Transaction, newItem: Transaction): Boolean {
+            return oldItem.id == newItem.id
+        }
+
+        override fun areContentsTheSame(oldItem: Transaction, newItem: Transaction): Boolean {
+            return oldItem == newItem
         }
     }
 }

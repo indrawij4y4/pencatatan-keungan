@@ -1,372 +1,135 @@
 package com.example.pencatatankeungaan
 
 /**
- * VoiceTransactionClassifier — Klasifikasi rule-based NLP untuk transaksi keuangan.
+ * VoiceTransactionClassifier — Klasifikasi NLP berbasis aturan (Rule-based NLP)
+ * tingkat tinggi untuk transaksi keuangan dalam bahasa Indonesia.
  *
- * Mendeteksi:
- * 1. Jenis transaksi (INCOME / EXPENSE) berdasarkan sistem skoring berbobot
- * 2. Kategori (Penjualan / Bahan Baku / Operasional / Lainnya) berdasarkan keyword matching
- * 3. Nominal (delegasi ke IndonesianNumberParser)
- *
- * Strategi klasifikasi jenis transaksi:
- * - Hitung skor berbobot dari SEMUA kata kunci Income dan Expense yang ditemukan
- * - Kata kunci "kuat" (indikator jelas) mendapat bobot lebih tinggi
- * - Kata kunci "lemah" (ambigu / kontekstual) mendapat bobot lebih rendah
- * - Pilih jenis dengan skor tertinggi
- * - Smart Default: jika ambigu atau skor sama → default EXPENSE
- *   (secara statistik, transaksi pengeluaran jauh lebih sering dari pemasukan)
+ * Menggunakan sistem analisis morfologi-semantik (Morpho-Semantic Rule Engine)
+ * yang mampu membedakan kalimat aktif vs pasif (arah transaksi) secara akurat,
+ * dilengkapi dengan Contextual NLP Engine untuk preposisi ("dari"/"ke") dan pronoun.
  */
 object VoiceTransactionClassifier {
 
     // ═══════════════════════════════════════════════════
-    // WEIGHTED KEYWORD SYSTEM
+    // DATA STRUCTURES
     // ═══════════════════════════════════════════════════
 
-    /**
-     * Data class untuk kata kunci berbobot.
-     * @param word kata kunci yang dicari
-     * @param weight bobot skor (1 = lemah/ambigu, 2 = sedang, 3 = kuat/jelas)
-     */
-    private data class WeightedKeyword(val word: String, val weight: Int)
-
-    // ═══════════════════════════════════════════════════
-    // DETEKSI JENIS TRANSAKSI (WEIGHTED)
-    // ═══════════════════════════════════════════════════
-
-    /**
-     * Kata kunci PEMASUKAN (Income) — diperluas dengan variasi imbuhan bahasa Indonesia.
-     *
-     * Bobot 3 = indikator kuat (hampir pasti income)
-     * Bobot 2 = indikator sedang (biasanya income, tapi kontekstual)
-     * Bobot 1 = indikator lemah (bisa income atau expense tergantung kalimat)
-     */
-    private val incomeKeywords = listOf(
-        // ── Kata kerja penjualan (bobot tinggi) ──
-        WeightedKeyword("jual", 3),
-        WeightedKeyword("jualan", 3),
-        WeightedKeyword("menjual", 3),
-        WeightedKeyword("terjual", 3),
-        WeightedKeyword("kejual", 3),
-        WeightedKeyword("dijual", 3),
-        WeightedKeyword("berjualan", 3),
-        WeightedKeyword("penjualan", 3),
-        WeightedKeyword("laku", 2),
-        WeightedKeyword("terlaku", 2),
-        WeightedKeyword("kelaku", 2),
-
-        // ── Kata kerja penerimaan (bobot tinggi) ──
-        WeightedKeyword("terima", 3),
-        WeightedKeyword("diterima", 3),
-        WeightedKeyword("menerima", 3),
-        WeightedKeyword("nerima", 3),
-        WeightedKeyword("penerimaan", 3),
-        WeightedKeyword("dapat", 2),
-        WeightedKeyword("mendapat", 3),
-        WeightedKeyword("mendapatkan", 3),
-        WeightedKeyword("dapet", 2),
-        WeightedKeyword("kedapetan", 2),
-        WeightedKeyword("didapat", 3),
-        WeightedKeyword("perolehan", 3),
-        WeightedKeyword("memperoleh", 3),
-        WeightedKeyword("diperoleh", 3),
-        WeightedKeyword("diberikan", 2),
-        WeightedKeyword("dikasih", 2),
-        WeightedKeyword("dikasi", 2),
-
-        // ── Kata kerja uang masuk ──
-        WeightedKeyword("masuk", 2),
-        WeightedKeyword("pemasukan", 3),
-        WeightedKeyword("pendapatan", 3),
-        WeightedKeyword("penghasilan", 3),
-        WeightedKeyword("income", 3),
-
-        // ── Gaji / upah (bobot tinggi — jelas income) ──
-        WeightedKeyword("gaji", 3),
-        WeightedKeyword("gajian", 3),
-        WeightedKeyword("digaji", 3),
-        WeightedKeyword("penggajian", 3),
-        WeightedKeyword("upah", 3),
-        WeightedKeyword("honor", 3),
-        WeightedKeyword("honorarium", 3),
-
-        // ── Kata kerja pembayaran masuk ──
-        WeightedKeyword("dibayar", 3),
-        WeightedKeyword("dibayarin", 3),
-        WeightedKeyword("dibayarkan", 3),
-        WeightedKeyword("bayaran", 2),
-        WeightedKeyword("terbayar", 2),
-        WeightedKeyword("terbayarkan", 2),
-
-        // ── Pencairan / cair ──
-        WeightedKeyword("cair", 3),
-        WeightedKeyword("mencair", 3),
-        WeightedKeyword("dicairkan", 3),
-        WeightedKeyword("pencairan", 3),
-
-        // ── Konteks usaha / bisnis ──
-        WeightedKeyword("omset", 3),
-        WeightedKeyword("omzet", 3),
-        WeightedKeyword("revenue", 3),
-        WeightedKeyword("laba", 3),
-        WeightedKeyword("untung", 3),
-        WeightedKeyword("keuntungan", 3),
-        WeightedKeyword("profit", 3),
-        WeightedKeyword("hasil", 2),
-        WeightedKeyword("komisi", 3),
-
-        // ── Konteks penjualan katering/warung ──
-        WeightedKeyword("orderan", 2),
-        WeightedKeyword("pesanan", 2),
-        WeightedKeyword("catering", 2),
-        WeightedKeyword("katering", 2),
-
-        // ── Transfer masuk / kiriman ──
-        WeightedKeyword("kiriman", 2),
-        WeightedKeyword("ditransfer", 2),
-        WeightedKeyword("transferan", 2),
-
-        // ── Bonus / hadiah ──
-        WeightedKeyword("bonus", 2),
-        WeightedKeyword("hadiah", 2),
-        WeightedKeyword("reward", 2),
-        WeightedKeyword("cashback", 2),
-
-        // ── Pinjaman masuk / hutang dibayar ──
-        WeightedKeyword("dilunasi", 3),
-        WeightedKeyword("dibalikin", 2),
-        WeightedKeyword("dikembalikan", 2),
-        WeightedKeyword("pengembalian", 3)
+    private data class StaticRootRule(
+        val name: String,
+        val regex: Regex,
+        val weight: Int = 3
     )
 
-    /**
-     * Kata kunci PENGELUARAN (Expense) — diperluas dengan variasi imbuhan bahasa Indonesia.
-     *
-     * Bobot 3 = indikator kuat (hampir pasti expense)
-     * Bobot 2 = indikator sedang (biasanya expense, tapi kontekstual)
-     * Bobot 1 = indikator lemah (bisa expense atau income tergantung kalimat)
-     */
-    private val expenseKeywords = listOf(
-        // ── Kata kerja pembelian (bobot tinggi) ──
-        WeightedKeyword("beli", 3),
-        WeightedKeyword("membeli", 3),
-        WeightedKeyword("dibeli", 3),
-        WeightedKeyword("terbeli", 3),
-        WeightedKeyword("kebeli", 3),
-        WeightedKeyword("pembelian", 3),
-        WeightedKeyword("belanja", 3),
-        WeightedKeyword("belanjaan", 3),
-        WeightedKeyword("berbelanja", 3),
-        WeightedKeyword("shopping", 2),
-        WeightedKeyword("borong", 2),
-        WeightedKeyword("memborong", 2),
-
-        // ── Jajan ──
-        WeightedKeyword("jajan", 3),
-        WeightedKeyword("jajanan", 3),
-
-        // ── Kata kerja pembayaran keluar ──
-        WeightedKeyword("bayar", 3),
-        WeightedKeyword("membayar", 3),
-        WeightedKeyword("membayarkan", 3),
-        WeightedKeyword("bayarin", 3),
-        WeightedKeyword("pembayaran", 3),
-        WeightedKeyword("ngebayar", 3),
-        WeightedKeyword("kebayar", 2),
-
-        // ── Harga / seharga ──
-        WeightedKeyword("seharga", 3),
-        WeightedKeyword("harga", 2),
-        WeightedKeyword("harganya", 2),
-
-        // ── Lunas / cicil ──
-        WeightedKeyword("lunas", 2),
-        WeightedKeyword("lunasi", 3),
-        WeightedKeyword("melunasi", 3),
-        WeightedKeyword("cicil", 3),
-        WeightedKeyword("cicilan", 3),
-        WeightedKeyword("mencicil", 3),
-        WeightedKeyword("dicicil", 2),
-        WeightedKeyword("angsuran", 3),
-
-        // ── Transfer / kirim uang ──
-        WeightedKeyword("transfer", 2),
-        WeightedKeyword("tf", 2),
-        WeightedKeyword("kirim", 2),
-        WeightedKeyword("mengirim", 2),
-        WeightedKeyword("ngirim", 2),
-
-        // ── Kata kerja pengeluaran ──
-        WeightedKeyword("pengeluaran", 3),
-        WeightedKeyword("keluar", 2),
-        WeightedKeyword("habis", 2),
-        WeightedKeyword("abis", 2),
-        WeightedKeyword("kehabisan", 2),
-        WeightedKeyword("menghabiskan", 3),
-        WeightedKeyword("expense", 3),
-
-        // ── Ongkos / biaya ──
-        WeightedKeyword("ongkir", 3),
-        WeightedKeyword("ongkos", 3),
-        WeightedKeyword("biaya", 3),
-        WeightedKeyword("cost", 2),
-        WeightedKeyword("kena", 1),
-        WeightedKeyword("kena biaya", 3),
-
-        // ── Kasih / beri uang ──
-        WeightedKeyword("kasih", 2),
-        WeightedKeyword("ngasih", 2),
-        WeightedKeyword("mengasih", 2),
-        WeightedKeyword("ngasi", 2),
-        WeightedKeyword("kasihkan", 2),
-        WeightedKeyword("beri", 2),
-        WeightedKeyword("memberikan", 2),
-        WeightedKeyword("memberi", 2),
-
-        // ── Konteks hutang/pinjam ──
-        WeightedKeyword("pinjam", 2),
-        WeightedKeyword("pinjamin", 2),
-        WeightedKeyword("minjemin", 2),
-        WeightedKeyword("meminjam", 2),
-        WeightedKeyword("meminjami", 2),
-        WeightedKeyword("meminjamkan", 2),
-        WeightedKeyword("dipinjam", 2),
-        WeightedKeyword("pinjaman", 2),
-        WeightedKeyword("utang", 2),
-        WeightedKeyword("hutang", 2),
-        WeightedKeyword("ngutang", 2),
-        WeightedKeyword("berutang", 2),
-        WeightedKeyword("berhutang", 2),
-
-        // ── Konteks operasional ──
-        WeightedKeyword("sewa", 3),
-        WeightedKeyword("menyewa", 3),
-        WeightedKeyword("kontrak", 2),
-        WeightedKeyword("tagihan", 3),
-        WeightedKeyword("servis", 2),
-        WeightedKeyword("service", 2),
-        WeightedKeyword("perbaikan", 2),
-        WeightedKeyword("reparasi", 2),
-        WeightedKeyword("isi ulang", 2),
-        WeightedKeyword("topup", 2),
-        WeightedKeyword("top up", 2),
-
-        // ── Donasi / sumbangan ──
-        WeightedKeyword("donasi", 3),
-        WeightedKeyword("sumbangan", 3),
-        WeightedKeyword("sedekah", 3),
-        WeightedKeyword("infaq", 3),
-        WeightedKeyword("zakat", 3),
-        WeightedKeyword("amal", 2),
-
-        // ── Denda / pajak ──
-        WeightedKeyword("denda", 3),
-        WeightedKeyword("pajak", 2),
-        WeightedKeyword("retribusi", 2)
+    private data class DirectionalVerbRule(
+        val name: String,
+        val passiveRegex: Regex, // Mengindikasikan UANG MASUK (Income)
+        val activeRegex: Regex,  // Mengindikasikan UANG KELUAR (Expense)
+        val passiveWeight: Int = 5,
+        val activeWeight: Int = 4
     )
 
     // ═══════════════════════════════════════════════════
-    // NEGATION HANDLING
+    // NEGATION SYSTEM
     // ═══════════════════════════════════════════════════
 
-    /**
-     * Kata-kata negasi yang membalik makna kata kunci berikutnya.
-     * Contoh: "belum dibayar" → bukan income, "tidak jual" → bukan income
-     */
-    private val negationWords = listOf(
+    private val negationWords = setOf(
         "tidak", "nggak", "ngga", "gak", "ga", "tak",
         "belum", "blm", "blom",
         "bukan", "jangan", "tanpa"
     )
 
     // ═══════════════════════════════════════════════════
-    // DETEKSI KATEGORI (tidak berubah, tetap simple matching)
+    // RULE DEFINITIONS
     // ═══════════════════════════════════════════════════
 
-    /** Kata kunci kategori PENJUALAN */
+    private val directionalVerbRules = listOf(
+        DirectionalVerbRule(
+            name = "beri_kasih",
+            passiveRegex = Regex("""\b(di\w*(beri|kasih|kasi)\w*|ter\w*(beri|kasih|kasi)\w*)\b""", RegexOption.IGNORE_CASE),
+            activeRegex = Regex("""\b((me|nge|pe)?(beri|kasih|kasi)(|kan|i|mu))\b""", RegexOption.IGNORE_CASE)
+        ),
+        DirectionalVerbRule(
+            name = "bayar",
+            passiveRegex = Regex("""\b(di\w*bayar\w*|ter\w*bayar\w*)\b""", RegexOption.IGNORE_CASE),
+            activeRegex = Regex("""\b((me|nge|pe)?bayar(|kan|i|mu))\b""", RegexOption.IGNORE_CASE)
+        ),
+        DirectionalVerbRule(
+            name = "transfer",
+            passiveRegex = Regex("""\b(di\w*(transfer|tf)\w*|ter\w*(transfer|tf)\w*)\b""", RegexOption.IGNORE_CASE),
+            activeRegex = Regex("""\b((me|nge|pe)?(transfer|tf)(|kan|i|mu))\b""", RegexOption.IGNORE_CASE)
+        ),
+        DirectionalVerbRule(
+            name = "kirim",
+            passiveRegex = Regex("""\b(di\w*kirim\w*|ter\w*kirim\w*)\b""", RegexOption.IGNORE_CASE),
+            activeRegex = Regex("""\b((me|nge|pe)?kirim(|kan|i|mu))\b""", RegexOption.IGNORE_CASE)
+        )
+    )
+
+    private val staticIncomeRules = listOf(
+        StaticRootRule("jual", Regex("""\b(jual\w*|menjual\w*|terjual\w*|kejual\w*|dijual\w*|penjualan\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("laku", Regex("""\b(laku|terlaku|kelaku)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("terima", Regex("""\b(terima\w*|menerima\w*|diterima\w*|penerimaan\w*|nerima\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("dapat", Regex("""\b(dapat\w*|mendapat\w*|didapat\w*|dapet\w*|kedapetan\w*|peroleh\w*|memperoleh\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("masuk", Regex("""\b(masuk\w*|pemasukan\w*|pendapatan\w*|penghasilan\w*|income)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("gaji", Regex("""\b(gaji\w*|digaji\w*|upah\w*|honor\w*|honorarium)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("cair", Regex("""\b(cair\w*|mencair\w*|dicairkan\w*|pencairan\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("untung", Regex("""\b(omset|omzet|revenue|laba|untung\w*|keuntungan\w*|profit|komisi)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("pesan", Regex("""\b(orderan\w*|pesanan\w*|catering|katering)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("bonus", Regex("""\b(bonus\w*|hadiah\w*|reward\w*|cashback)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("transferan", Regex("""\b(transferan\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("kiriman", Regex("""\b(kiriman\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("bayaran", Regex("""\b(bayaran\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("pemberian", Regex("""\b(pemberian\w*)\b""", RegexOption.IGNORE_CASE)),
+        // Tambahan Kosakata Baru (dengan bobot lebih tinggi untuk menangkal kata-kata pengeluaran terkait)
+        StaticRootRule("kembali", Regex("""\b(kembali\w*|kembalian\w*)\b""", RegexOption.IGNORE_CASE), weight = 5),
+        StaticRootRule("klaim", Regex("""\b(klaim|reimburse|rembes|refund)\b""", RegexOption.IGNORE_CASE), weight = 5),
+        StaticRootRule("hibah", Regex("""\b(hibah|warisan)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("bunga", Regex("""\b(bunga|dividen)\b""", RegexOption.IGNORE_CASE))
+    )
+
+    private val staticExpenseRules = listOf(
+        StaticRootRule("beli", Regex("""\b(beli\w*|membeli\w*|dibeli\w*|terbeli\w*|kebeli\w*|pembelian\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("belanja", Regex("""\b(belanja\w*|berbelanja\w*|shopping|borong\w*|memborong\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("jajan", Regex("""\b(jajan\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("cicil", Regex("""\b(cicil\w*|mencicil\w*|dicicil\w*|angsuran\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("keluar", Regex("""\b(keluar\w*|pengeluaran\w*|habis\w*|abis|kehabisan|menghabiskan|expense)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("sewa", Regex("""\b(sewa\w*|menyewa\w*|kontrak\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("servis", Regex("""\b(servis|service|perbaikan|reparasi)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("biaya", Regex("""\b(ongkir|ongkos|biaya\w*|cost|tagihan\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("donasi", Regex("""\b(donasi|sumbangan|sedekah|infaq|zakat|amal)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("denda", Regex("""\b(denda|pajak|retribusi)\b""", RegexOption.IGNORE_CASE)),
+        // Tambahan Kosakata Baru
+        StaticRootRule("talangan", Regex("""\b(talangan|nalangin|pinjamin)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("utang", Regex("""\b(utang\w*|hutang\w*|rugi\w*|kerugian\w*)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("patungan", Regex("""\b(patungan)\b""", RegexOption.IGNORE_CASE)),
+        StaticRootRule("langganan", Regex("""\b(langganan|subscribe|member)\b""", RegexOption.IGNORE_CASE))
+    )
+
+    // ═══════════════════════════════════════════════════
+    // DETEKSI KATEGORI (Keyword-matching sederhana)
+    // ═══════════════════════════════════════════════════
+
     private val salesKeywords = listOf(
-        // Aktivitas jual
-        "jual", "jualan", "penjualan", "terjual",
-        "laku", "orderan", "pesanan",
-        "omset", "omzet",
-        // Jenis dagangan umum
-        "katering", "catering", "makanan", "minuman",
-        "dagangan", "barang", "produk"
+        "jual", "jualan", "penjualan", "terjual", "laku", "orderan", "pesanan",
+        "omset", "omzet", "katering", "catering", "makanan", "minuman", "dagangan", "barang", "produk"
     )
 
-    /** Kata kunci kategori BAHAN BAKU */
     private val rawMaterialKeywords = listOf(
-        // ── Bahan pokok ──
-        "beras", "gabah", "ketan",
-        "minyak", "minyak goreng", "minyak sayur",
-        "tepung", "tepung terigu", "tepung beras", "tepung tapioka", "tepung maizena",
-        "gula", "gula pasir", "gula merah", "gula aren",
-        "garam", "vetsin", "micin", "penyedap",
-        // ── Protein ──
-        "telur", "telor", "endog",
-        "ayam", "daging", "ikan", "udang", "cumi", "seafood",
-        "tahu", "tempe", "oncom",
-        // ── Sayuran & buah ──
-        "sayur", "sayuran", "kangkung", "bayam", "wortel",
-        "bawang", "bawang merah", "bawang putih", "bawang bombay",
-        "cabai", "cabe", "lombok", "rawit",
-        "tomat", "terong", "kentang", "jagung",
-        "sawi", "kol", "kubis", "selada", "timun", "mentimun",
-        "buncis", "labu", "pare", "seledri",
-        "buah", "pisang", "jeruk", "apel", "mangga", "pepaya",
-        "kelapa", "santan",
-        // ── Bumbu & rempah ──
-        "bumbu", "rempah", "kunyit", "jahe", "lengkuas", "laos",
-        "sereh", "serai", "daun salam", "daun jeruk",
-        "merica", "lada", "ketumbar", "pala", "kayu manis",
-        "kecap", "saos", "saus", "sambal",
-        "terasi", "petis",
-        // ── Bahan kering & olahan ──
-        "mie", "mi", "indomie", "bihun", "soun", "kwetiau",
-        "roti", "mentega", "margarin", "keju", "susu",
-        "kopi", "teh", "coklat", "cokelat",
-        "es batu",
-        // ── Kata kunci pembelian bahan ──
-        "bahan baku", "bahan mentah", "bahan dasar",
-        "restock", "restok", "kulakan", "belanja bahan"
+        "beras", "gabah", "ketan", "minyak", "tepung", "gula", "garam", "vetsin", "micin", "penyedap",
+        "telur", "telor", "endog", "ayam", "daging", "ikan", "udang", "cumi", "seafood", "tahu", "tempe", "oncom",
+        "sayur", "kangkung", "bayam", "wortel", "bawang", "cabai", "cabe", "lombok", "rawit", "tomat", "terong",
+        "kentang", "jagung", "sawi", "kelapa", "santan", "bumbu", "rempah", "kunyit", "jahe", "lengkuas", "sereh",
+        "merica", "lada", "ketumbar", "kecap", "saos", "saus", "sambal", "terasi", "mie", "mi", "indomie", "bihun",
+        "roti", "mentega", "keju", "susu", "kopi", "teh", "coklat", "es batu", "bahan baku", "kulakan"
     )
 
-    /** Kata kunci kategori OPERASIONAL */
     private val operationalKeywords = listOf(
-        // ── Utilitas ──
-        "listrik", "pln", "token listrik",
-        "air", "pdam", "pam",
-        "wifi", "internet", "indihome", "firstmedia",
-        "telepon", "telpon",
-        // ── Komunikasi & data ──
-        "pulsa", "kuota", "paket data", "paket internet",
-        "top up", "topup", "isi ulang",
-        // ── Transportasi & BBM ──
-        "bensin", "solar", "bbm", "pertamax", "pertalite",
-        "parkir", "tol", "e-toll", "etol",
-        "ojek", "ojol", "gojek", "grab", "taksi", "taxi",
-        "ongkir", "ongkos kirim", "pengiriman", "ekspedisi",
-        "jne", "jnt", "sicepat", "anteraja", "pos",
-        // ── Sewa & properti ──
-        "sewa", "kontrak", "kontrakan",
-        "kos", "kosan", "kost",
-        // ── Perlengkapan toko/usaha ──
-        "plastik", "kresek", "kantong",
-        "tisu", "tissue", "lap", "serbet",
-        "sabun", "deterjen", "pembersih",
-        "gas", "elpiji", "lpg", "tabung gas",
-        "galon", "air galon",
-        // ── Peralatan & maintenance ──
-        "servis", "service", "reparasi", "perbaikan",
-        "alat", "peralatan", "sparepart",
-        "printer", "tinta", "kertas", "atk",
-        // ── Biaya tenaga kerja ──
-        "lembur", "thr", "bonus karyawan",
-        // ── Pajak & administrasi ──
-        "pajak", "retribusi", "iuran",
-        "asuransi", "bpjs",
-        "materai", "notaris", "izin",
-        // ── Digital & langganan ──
-        "langganan", "subscription"
+        "listrik", "pln", "token", "air", "pdam", "pam", "wifi", "internet", "indihome", "telepon", "telpon",
+        "pulsa", "kuota", "paket data", "top up", "topup", "bensin", "solar", "bbm", "pertamax", "pertalite",
+        "parkir", "tol", "e-toll", "ojek", "ojol", "gojek", "grab", "taksi", "ongkir", "ongkos", "pengiriman",
+        "ekspedisi", "sewa", "kontrak", "kos", "kost", "plastik", "kresek", "kantong", "tisu", "tissue",
+        "sabun", "deterjen", "gas", "elpiji", "lpg", "galon", "servis", "service", "printer", "tinta", "kertas", "atk",
+        "gaji", "upah", "honor", "lembur", "thr", "pajak", "iuran", "bpjs", "materai", "langganan"
     )
 
     // ═══════════════════════════════════════════════════
@@ -383,22 +146,9 @@ object VoiceTransactionClassifier {
     )
 
     // ═══════════════════════════════════════════════════
-    // FUNGSI UTAMA
+    // FUNGSI UTAMA (MAIN CLASSIFY ENTRYPOINT)
     // ═══════════════════════════════════════════════════
 
-    /**
-     * Klasifikasikan teks transkripsi menjadi transaksi.
-     *
-     * Alur:
-     * 1. Deteksi nominal via IndonesianNumberParser
-     * 2. Hitung skor berbobot Income vs Expense (baca SELURUH kalimat)
-     * 3. Terapkan negation handling (kata negasi membalik skor)
-     * 4. Pilih jenis berdasarkan skor tertinggi, default EXPENSE jika ambigu
-     * 5. Deteksi kategori berdasarkan keyword matching
-     *
-     * @param rawText Teks mentah dari speech-to-text
-     * @return ClassificationResult berisi type, category, amount, description, dan confidence
-     */
     fun classify(rawText: String): ClassificationResult {
         val lowerText = rawText.lowercase().trim()
         var confidence = 0.0f
@@ -407,58 +157,88 @@ object VoiceTransactionClassifier {
         val amount = IndonesianNumberParser.parse(rawText)
         if (amount > 0L) confidence += 0.3f
 
-        // --- 2. Hitung Skor Berbobot untuk Jenis Transaksi ---
-        val incomeScore = calculateWeightedScore(lowerText, incomeKeywords)
-        val expenseScore = calculateWeightedScore(lowerText, expenseKeywords)
+        // --- 2. Hitung Skor Pemasukan vs Pengeluaran ---
+        var incomeScore = 0
+        var expenseScore = 0
 
-        // --- 3. Tentukan Jenis Transaksi berdasarkan Skor ---
+        // A. Evaluasi Verba Arah (Directional Verbs)
+        for (rule in directionalVerbRules) {
+            val passiveMatches = rule.passiveRegex.findAll(lowerText)
+            var hasPassiveMatch = false
+            for (match in passiveMatches) {
+                if (!isNegated(lowerText, match.value, match.range.first)) {
+                    incomeScore += rule.passiveWeight
+                    hasPassiveMatch = true
+                    break
+                }
+            }
+            if (hasPassiveMatch) continue
+
+            val activeMatches = rule.activeRegex.findAll(lowerText)
+            for (match in activeMatches) {
+                if (!isNegated(lowerText, match.value, match.range.first)) {
+                    expenseScore += rule.activeWeight
+                    break
+                }
+            }
+        }
+
+        // B. Evaluasi Kata Kerja/Kata Benda Statis (Static Rules)
+        for (rule in staticIncomeRules) {
+            val matches = rule.regex.findAll(lowerText)
+            for (match in matches) {
+                if (!isNegated(lowerText, match.value, match.range.first)) {
+                    incomeScore += rule.weight
+                    break
+                }
+            }
+        }
+
+        for (rule in staticExpenseRules) {
+            val matches = rule.regex.findAll(lowerText)
+            for (match in matches) {
+                if (!isNegated(lowerText, match.value, match.range.first)) {
+                    expenseScore += rule.weight
+                    break
+                }
+            }
+        }
+
+        // C. Analisis Relasi Kontekstual (Preposisi Arah & Kata Ganti Rekening)
+        val (incomeBoost, expenseBoost) = analyzeContext(lowerText)
+        incomeScore += incomeBoost
+        expenseScore += expenseBoost
+
+        // --- 3. Tentukan Jenis Transaksi Berdasarkan Skor ---
         val type: TransactionType
         val scoreDifference = kotlin.math.abs(incomeScore - expenseScore)
 
         when {
-            // Kasus 1: Income menang jelas (skor lebih tinggi)
+            // Pemasukan Menang Jelas
             incomeScore > expenseScore && incomeScore > 0 -> {
                 type = TransactionType.INCOME
                 confidence += 0.3f
-                // Bonus confidence jika selisih besar (indikator kuat)
                 if (scoreDifference >= 3) confidence += 0.15f
-                else if (scoreDifference >= 2) confidence += 0.1f
-                else confidence += 0.05f // selisih tipis, kurang yakin
+                else confidence += 0.05f
             }
 
-            // Kasus 2: Expense menang jelas (skor lebih tinggi)
+            // Pengeluaran Menang Jelas
             expenseScore > incomeScore && expenseScore > 0 -> {
                 type = TransactionType.EXPENSE
                 confidence += 0.3f
                 if (scoreDifference >= 3) confidence += 0.15f
-                else if (scoreDifference >= 2) confidence += 0.1f
                 else confidence += 0.05f
             }
 
-            // Kasus 3: Skor sama & keduanya > 0 → SMART DEFAULT ke Expense
+            // Ambigu (Skor Sama Kuat) -> Smart Default ke Pengeluaran (Expense)
             incomeScore > 0 && expenseScore > 0 && incomeScore == expenseScore -> {
                 type = TransactionType.EXPENSE
-                confidence += 0.15f // confidence rendah karena ambigu
+                confidence += 0.10f
             }
 
-            // Kasus 4: Hanya ada skor expense
-            expenseScore > 0 -> {
-                type = TransactionType.EXPENSE
-                confidence += 0.3f
-            }
-
-            // Kasus 5: Hanya ada skor income
-            incomeScore > 0 -> {
-                type = TransactionType.INCOME
-                confidence += 0.3f
-            }
-
-            // Kasus 6: Tidak ada kata kunci sama sekali → SMART DEFAULT ke Expense
-            // Alasan: secara statistik, transaksi pengeluaran jauh lebih sering
-            // dari pemasukan dalam pencatatan keuangan pribadi
+            // Tidak Ada Keyword Apapun -> Smart Default ke Pengeluaran (Expense)
             else -> {
                 type = TransactionType.EXPENSE
-                // Confidence rendah karena murni tebakan
                 confidence += 0.05f
             }
         }
@@ -468,7 +248,6 @@ object VoiceTransactionClassifier {
         val rawMaterialScore = countKeywordMatches(lowerText, rawMaterialKeywords)
         val operationalScore = countKeywordMatches(lowerText, operationalKeywords)
 
-        // Pilih kategori dengan skor tertinggi
         val categoryScores = mapOf(
             "Penjualan" to salesScore,
             "Bahan Baku" to rawMaterialScore,
@@ -476,19 +255,14 @@ object VoiceTransactionClassifier {
         )
 
         val bestCategory = categoryScores.maxByOrNull { it.value }
-        val category: String
-        if (bestCategory != null && bestCategory.value > 0) {
-            category = bestCategory.key
+        val category = if (bestCategory != null && bestCategory.value > 0) {
             confidence += 0.2f
-            if (bestCategory.value >= 2) confidence += 0.1f
+            bestCategory.key
         } else {
-            category = "Lainnya"
+            "Lainnya"
         }
 
-        // Clamp confidence to 0.0..1.0
         confidence = confidence.coerceIn(0.0f, 1.0f)
-
-        // --- 5. Buat Deskripsi ---
         val description = generateDescription(lowerText)
 
         return ClassificationResult(
@@ -502,113 +276,114 @@ object VoiceTransactionClassifier {
     }
 
     // ═══════════════════════════════════════════════════
-    // SCORING ENGINE
+    // UTILITY & CONTEXT METHODS
     // ═══════════════════════════════════════════════════
 
     /**
-     * Hitung skor berbobot dari kata kunci yang cocok dalam teks.
-     *
-     * Fitur:
-     * - Mendukung multi-word keywords ("bahan baku", "ongkos kirim")
-     * - Menerapkan negation handling: jika kata kunci didahului kata negasi,
-     *   bobot TIDAK ditambahkan (kata tersebut di-skip)
-     * - Kata kunci "kuat" (weight=3) berkontribusi lebih besar ke skor akhir
-     *
-     * @param text teks yang sudah di-lowercase
-     * @param keywords list kata kunci berbobot
-     * @return total skor berbobot
+     * Memindai hubungan relasional kata kerja arah dengan preposisi ("dari"/"ke") dan pronoun.
      */
-    private fun calculateWeightedScore(text: String, keywords: List<WeightedKeyword>): Int {
-        var totalScore = 0
-        val words = text.split("\\s+".toRegex())
+    private fun analyzeContext(lowerText: String): Pair<Int, Int> {
+        var incomeBoost = 0
+        var expenseBoost = 0
 
-        for (keyword in keywords) {
-            if (keyword.word.contains(" ")) {
-                // Multi-word keyword: cek as substring
-                if (text.contains(keyword.word)) {
-                    // Cek negasi sebelum multi-word keyword
-                    if (!isNegated(text, keyword.word)) {
-                        totalScore += keyword.weight
-                    }
-                }
-            } else {
-                // Single-word keyword: cek sebagai whole word
-                val regex = Regex("""\b${Regex.escape(keyword.word)}\b""")
-                val match = regex.find(text)
-                if (match != null) {
-                    // Cek negasi: apakah kata sebelumnya adalah kata negasi?
-                    if (!isNegatedAtPosition(words, keyword.word)) {
-                        totalScore += keyword.weight
+        // Membagi kalimat menjadi token kata dasar (tanpa tanda baca)
+        val tokens = lowerText.split(Regex("""\s+"""))
+            .map { it.replace(Regex("""[^a-zA-Z0-9]"""), "") }
+            .filter { it.isNotEmpty() }
+
+        val directionalVerbs = setOf("transfer", "tf", "kirim", "ngirim", "bayar", "bayarin", "kirimi", "dikirimi")
+        val fromPrepositions = setOf("dari", "dr")
+        val toPrepositions = setOf("ke", "kepada", "kpd", "untuk", "utk", "buat")
+        val internalAccounts = setOf("saya", "aku", "rekeningku", "walletku", "dompetku", "kas", "ewalletku")
+
+        for (i in tokens.indices) {
+            val token = tokens[i]
+
+            // Periksa apakah token mengandung/merupakan kata kerja arah
+            if (token in directionalVerbs || directionalVerbs.any { token.contains(it) }) {
+                // Pindai ke depan hingga 3 token berikutnya
+                for (j in 1..3) {
+                    if (i + j < tokens.size) {
+                        val nextToken = tokens[i + j]
+
+                        // Kasus A: Diikuti preposisi "dari" / "dr" -> UANG MASUK (Income)
+                        if (nextToken in fromPrepositions) {
+                            incomeBoost += 6
+                            break
+                        }
+
+                        // Kasus B: Diikuti preposisi tujuan "ke" / "untuk" / "buat"
+                        if (nextToken in toPrepositions) {
+                            // Cek apakah tujuan adalah akun internal milik user sendiri
+                            if (i + j + 1 < tokens.size) {
+                                val targetToken = tokens[i + j + 1]
+                                if (targetToken in internalAccounts) {
+                                    // "transfer ke saya" -> UANG MASUK (Income)
+                                    incomeBoost += 6
+                                } else {
+                                    // "transfer ke budi" -> UANG KELUAR (Expense)
+                                    expenseBoost += 6
+                                }
+                            } else {
+                                // "transfer ke..." -> UANG KELUAR (Expense)
+                                expenseBoost += 6
+                            }
+                            break
+                        }
                     }
                 }
             }
         }
-        return totalScore
-    }
 
-    /**
-     * Cek apakah sebuah kata kunci dinegasikan (didahului kata negasi).
-     * Untuk single-word keywords.
-     *
-     * Contoh: "tidak jual" → jual dinegasikan
-     *         "belum dibayar" → dibayar dinegasikan
-     */
-    private fun isNegatedAtPosition(words: List<String>, keyword: String): Boolean {
-        for (i in words.indices) {
-            if (words[i] == keyword && i > 0) {
-                // Cek 1 kata sebelumnya
-                if (words[i - 1] in negationWords) return true
-                // Cek 2 kata sebelumnya (untuk pola "belum pernah dibayar")
-                if (i > 1 && words[i - 2] in negationWords) return true
-            }
+        // Skor boost untuk kombinasi verba aktif (misal "transfer") dan deskriptor masuk (misal "menerima"/"masuk")
+        val hasActiveVerb = tokens.any { it in directionalVerbs || directionalVerbs.any { v -> it.contains(v) } }
+        
+        val terimaRegex = Regex("""\b(terima\w*|menerima\w*|diterima\w*|penerimaan\w*|nerima\w*)\b""", RegexOption.IGNORE_CASE)
+        val dapatRegex = Regex("""\b(dapat\w*|mendapat\w*|didapat\w*|dapet\w*|kedapetan\w*|peroleh\w*|memperoleh\w*)\b""", RegexOption.IGNORE_CASE)
+        val masukRegex = Regex("""\b(masuk\w*|pemasukan\w*|pendapatan\w*|penghasilan\w*|income)\b""", RegexOption.IGNORE_CASE)
+        
+        val hasIncomeDescriptor = terimaRegex.containsMatchIn(lowerText) || 
+                                   dapatRegex.containsMatchIn(lowerText) || 
+                                   masukRegex.containsMatchIn(lowerText)
+                                   
+        if (hasActiveVerb && hasIncomeDescriptor) {
+            incomeBoost += 5
         }
-        return false
+
+        return Pair(incomeBoost, expenseBoost)
     }
 
     /**
-     * Cek apakah multi-word keyword dinegasikan.
-     * Mencari kata negasi yang muncul tepat sebelum keyword dalam teks.
+     * Mendeteksi apakah suatu kata dinegasikan oleh kata sebelum atau dua kata sebelumnya.
      */
-    private fun isNegated(text: String, keyword: String): Boolean {
-        val index = text.indexOf(keyword)
-        if (index <= 0) return false
+    private fun isNegated(text: String, matchedWord: String, matchIndex: Int): Boolean {
+        if (matchIndex <= 0) return false
 
-        // Ambil beberapa kata sebelum keyword
-        val precedingText = text.substring(0, index).trim()
+        val precedingText = text.substring(0, matchIndex).trim()
         val precedingWords = precedingText.split("\\s+".toRegex())
 
-        // Cek apakah kata terakhir sebelum keyword adalah negasi
-        if (precedingWords.isNotEmpty() && precedingWords.last() in negationWords) {
-            return true
+        if (precedingWords.isNotEmpty()) {
+            val lastWord = precedingWords.last().replace(Regex("""[^a-zA-Z0-9]"""), "")
+            if (lastWord in negationWords) return true
+
+            if (precedingWords.size >= 2) {
+                val secondToLastWord = precedingWords[precedingWords.size - 2].replace(Regex("""[^a-zA-Z0-9]"""), "")
+                if (secondToLastWord in negationWords) return true
+            }
         }
         return false
     }
 
-    /**
-     * Hitung jumlah keyword (non-weighted) yang cocok dalam teks.
-     * Digunakan untuk deteksi kategori yang tidak memerlukan bobot.
-     */
     private fun countKeywordMatches(text: String, keywords: List<String>): Int {
         var count = 0
         for (keyword in keywords) {
-            if (keyword.contains(" ")) {
-                // Multi-word keyword: cek as substring
-                if (text.contains(keyword)) count++
-            } else {
-                // Single-word keyword: cek as whole word using word boundary
-                val regex = Regex("""\b${Regex.escape(keyword)}\b""")
-                if (regex.containsMatchIn(text)) count++
-            }
+            val regex = Regex("""\b${Regex.escape(keyword)}\b""", RegexOption.IGNORE_CASE)
+            if (regex.containsMatchIn(text)) count++
         }
         return count
     }
 
-    /**
-     * Generate deskripsi singkat dari teks asli.
-     * Menghapus angka-angka dan kata bantu, menyisakan kata-kata bermakna.
-     */
     private fun generateDescription(text: String): String {
-        // Capitalize first letter dan trim
         val cleaned = text.trim()
         return if (cleaned.isNotEmpty()) {
             cleaned.replaceFirstChar { it.uppercase() }

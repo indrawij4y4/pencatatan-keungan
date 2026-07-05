@@ -1,35 +1,30 @@
-# Built artifacts
-bin/
-gen/
-out/
+# Built artifacts and outputs
 build/
 /build
 app/build/
+*.apk
+!app-debug.apk
+*.aar
+build_output.txt
 
-# Gradle files
-.gradle/
-*/build/
-
-# Local configuration file (SDK path, etc.)
-local.properties
-
-# Log files
-*.log
-
-# Android Studio / IntelliJ IDEA Files
+# IDE settings and configurations
 .idea/
 *.iml
 *.ipr
 *.iws
+.navigation/
 
-# OS Files
+# Gradle files
+.gradle/
+local.properties
+/local.properties
+
+# OS files
 .DS_Store
 Thumbs.db
 
-# Keystore & Signing files
-*.jks
-*.keystore
-
-# APK & Bundle files
-*.apk
-*.aab
+# NDk and external builds
+.externalNativeBuild/
+.cxx/
+captures/
+*.log
