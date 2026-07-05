@@ -10,7 +10,7 @@ Untuk rekan-rekan yang ingin menguji coba aplikasi secara langsung di perangkat 
 
 | File Rilis | Deskripsi | Link Download |
 | :--- | :--- | :--- |
-| **🚀 APK Release (v1.0.0-MVP)** | Versi MVP pertama siap instal di semua perangkat Android | [**Download app-debug.apk**](https://github.com/indrawij4y4/pencatatan-keungan/releases/download/v1.0.0-MVP/app-debug.apk) |
+| **🚀 APK Release (v1.0.0-MVP)** | Versi MVP pertama siap instal di semua perangkat Android | [**Download app-debug.apk**](https://github.com/indrawij4y4/pencatatan-keungan/releases/download/v1.1/app-debug.apk) |
 | **📦 Halaman Rilis GitHub** | Akses ke rilis versi dan log perubahan di GitHub | [**Lihat Releases**](https://github.com/indrawij4y4/pencatatan-keungan/releases) |
 
 *Catatan: Pastikan Anda telah mengizinkan instalasi dari "Sumber tidak dikenal" (Unknown Sources) pada pengaturan keamanan ponsel Android Anda sebelum menginstal APK.*
