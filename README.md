@@ -1,12 +1,12 @@
-# 📱 Pencatatan Keuangan Cerdas (Smart Finance Tracker)
+# 📱 Pencatatan Keuangan  (Tugas uas kelompok 4 Ti B 26)
 
-Aplikasi pencatatan keuangan pribadi berbasis Android yang didesain secara modern, aman, dan cerdas. Aplikasi ini tidak hanya mencatat transaksi harian biasa, tetapi juga dilengkapi dengan fitur input suara otomatis, pemindaian struk belanja, visualisasi data interaktif, dan enkripsi data tingkat tinggi untuk menjaga privasi keuangan Anda.
+Aplikasi pencatatan keuangan pribadi berbasis Android yang didesain secara modern, aman, dan cerdas. Aplikasi ini tidak hanya mencatat transaksi harian biasa, tetapi juga dilengkapi dengan fitur input suara otomatis dan visualisasi data interaktif.
 
 ---
 
 ## 📥 Link Download Aplikasi (APK)
 
-Untuk dosen, penguji, atau rekan yang ingin menguji coba aplikasi secara langsung di perangkat Android tanpa perlu mem-build kode sumber, silakan unduh APK melalui tautan di bawah ini:
+Untuk rekan-rekan yang ingin menguji coba aplikasi secara langsung di perangkat Android tanpa perlu mem-build kode sumber, silakan unduh APK melalui tautan di bawah ini:
 
 | File Rilis | Deskripsi | Link Download |
 | :--- | :--- | :--- |
@@ -22,13 +22,11 @@ Untuk dosen, penguji, atau rekan yang ingin menguji coba aplikasi secara langsun
 ### 1. 🎤 Asisten Input Suara Cerdas (*Voice Input Manager*)
 Mencatat keuangan kini lebih cepat. Cukup ucapkan nominal dan kategori (contoh: *"Beli bakso dua puluh ribu rupiah"*), aplikasi akan secara otomatis mendeteksi jumlah uang dan mengklasifikasikan kategori transaksi menggunakan algoritma parsing teks lokal (*Indonesian Number & Text Parser*).
 
-### 2. 🧾 Pemindaian Struk Belanja (*Receipt OCR & Parser*)
-Unggah foto struk belanja Anda untuk mengekstrak data transaksi (seperti nama toko, daftar belanja, total pengeluaran, dan tanggal transaksi) secara otomatis demi pencatatan yang lebih praktis.
 
-### 3. 🔐 Database Terenkripsi Militer (*SQLCipher & Android KeyStore*)
+### 2. 🔐 Database Terenkripsi Militer (*SQLCipher & Android KeyStore*)
 Keamanan data adalah prioritas utama. Seluruh data transaksi Anda disimpan secara lokal menggunakan database **Room SQLite** yang dienkripsi penuh menggunakan **SQLCipher**. Kunci enkripsi diamankan menggunakan **Android KeyStore** tingkat sistem untuk mencegah kebocoran data dari serangan *rooting* atau penyadapan database lokal.
 
-### 4. 📊 Visualisasi Laporan Premium (*Custom Interactive Charts*)
+### 3. 📊 Visualisasi Laporan Premium (*Custom Interactive Charts*)
 Menyajikan visualisasi kesehatan keuangan Anda dengan dua jenis chart buatan sendiri (*Custom Views*):
 * **BarChartView**: Grafik batang arus kas mingguan interaktif (Pemasukan vs Pengeluaran).
 * **DonutChartView**: Grafik donat interaktif untuk melacak persentase kategori pengeluaran Anda.
@@ -73,5 +71,8 @@ Jika Anda ingin menjalankan atau memodifikasi kode sumber aplikasi ini:
 
 ---
 
-## 👤 Penulis
-* **Indra Wijaya** ([@indrawij4y4](https://github.com/indrawij4y4))
+## Anggota kelompok
+* **1. Indra Wijaya**
+* **2. Nurfitri akbar**
+* **2. Agikk**
+
